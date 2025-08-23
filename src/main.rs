@@ -16,7 +16,6 @@ use rand::rngs::StdRng;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-
 //help print colorful chracters
 fn pr(c: char) {
     match &c {
@@ -47,7 +46,7 @@ struct Cli {
     #[arg(short = 'f', long = "final-set")]
     final_repo: Option<PathBuf>,
     #[arg(short = 'a', long = "acceptable-set")]
-    accept_repo:Option<PathBuf>,
+    accept_repo: Option<PathBuf>,
 }
 
 //for reactive mood,output the guess result history
@@ -61,7 +60,7 @@ fn play_tty(
     answer_list: &mut Vec<String>,
     guess_list: &mut BTreeMap<String, i32>,
     final_list: &Vec<String>,
-    accept_list:&Vec<String>,
+    accept_list: &Vec<String>,
     id: usize,
 ) -> i32 {
     let mut game_record: Vec<GameHistory> = Vec::new();
@@ -112,7 +111,7 @@ fn play_tty(
         io::stdin()
             .read_line(&mut answer_word)
             .expect("cannot read");
-        io::stdout().flush().unwrap();
+        //io::stdout().flush().unwrap();
     }
     answer_list.push(answer_word.clone());
 
@@ -260,7 +259,7 @@ fn play_dis_tty(
     answer_list: &mut Vec<String>,
     guess_list: &mut BTreeMap<String, i32>,
     final_list: &Vec<String>,
-    accept_list:&Vec<String>,
+    accept_list: &Vec<String>,
     id: usize,
 ) -> i32 {
     let mut answer_word: String;
@@ -296,7 +295,7 @@ fn play_dis_tty(
         io::stdin()
             .read_line(&mut answer_word)
             .expect("cannot read");
-        io::stdout().flush().unwrap();
+        //io::stdout().flush().unwrap();
     }
     answer_list.push(answer_word.clone());
     io::stdout().flush().unwrap();
@@ -436,7 +435,7 @@ fn load_word_list(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::error::Err
         .map(|line| line.trim().to_lowercase())
         .filter(|word| !word.is_empty())
         .collect();
-    
+
     if words.is_empty() {
         return Err("Empty".into());
     }
@@ -450,7 +449,7 @@ fn load_word_list(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::error::Err
     }
     let mut sorted_words = words;
     sorted_words.sort();
-    return Ok(sorted_words)
+    return Ok(sorted_words);
 }
 
 fn load_accept_list(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -460,7 +459,7 @@ fn load_accept_list(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::error::E
         .map(|line| line.trim().to_lowercase())
         .filter(|word| !word.is_empty())
         .collect();
-    
+
     if words.is_empty() {
         return Err("Empty".into());
     }
@@ -474,9 +473,8 @@ fn load_accept_list(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::error::E
     }
     let mut sorted_words = words;
     sorted_words.sort();
-    return Ok(sorted_words)
+    return Ok(sorted_words);
 }
-
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let is_tty = atty::is(atty::Stream::Stdout);
@@ -485,14 +483,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut guess_list: BTreeMap<String, i32> = BTreeMap::new();
 
     let mut final_list: Vec<String>;
-    if let Some(ref x)=cli.final_repo{
-        match load_word_list(&x){
-            std::result::Result::Ok(x)=>final_list=x,
+    if let Some(ref x) = cli.final_repo {
+        match load_word_list(&x) {
+            std::result::Result::Ok(x) => final_list = x,
             std::result::Result::Err(_x) => return Err(String::from("load error").into()),
-        } 
-    }
-    else {
-        final_list= FINAL.iter().map(|&s| s.to_string()).collect();
+        } // or use .unwrap() directly
+    } else {
+        final_list = FINAL.iter().map(|&s| s.to_string()).collect();
     }
     let mut rng = if let Some(seed) = cli.seed {
         StdRng::seed_from_u64(seed)
@@ -501,12 +498,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     final_list.shuffle(&mut rng);
 
-    let accept_list:Vec<String>;
-    if let Some(ref x)=cli.accept_repo{
-        accept_list= load_accept_list(&x).unwrap();
-    }
-    else {
-        accept_list= ACCEPTABLE.iter().map(|&s| s.to_string()).collect();
+    let accept_list: Vec<String>;
+    if let Some(ref x) = cli.accept_repo {
+        accept_list = load_accept_list(&x).unwrap();
+    } else {
+        accept_list = ACCEPTABLE.iter().map(|&s| s.to_string()).collect();
     }
 
     if is_tty {
@@ -549,7 +545,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     if cli.status_verbos {
-                        io::stdout().flush().unwrap();
+                        //io::stdout().flush().unwrap();
                         if success_record > 0 {
                             println!(
                                 "{} {} {:.2}",
@@ -560,7 +556,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         } else {
                             println!("0 {} 0.00", turns_record - success_record);
                         }
-                        io::stdout().flush().unwrap();
+                        //io::stdout().flush().unwrap();
                         let mut entries: Vec<(&String, &i32)> = guess_list.iter().collect();
                         entries.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
                         for iter in entries.iter().take(5) {
@@ -570,7 +566,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         println!("{}", ' ');
                     }
 
-                    io::stdout().flush().unwrap();
+                    //io::stdout().flush().unwrap();
                     println!("Do you want a new try? [Y/n]");
                     let mut cont = String::new();
                     std::io::stdin().read_line(&mut cont).expect("cannot read");
@@ -619,7 +615,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     if cli.status_verbos {
-                        io::stdout().flush().unwrap();
+                        //io::stdout().flush().unwrap();
                         if success_record > 0 {
                             println!(
                                 "{} {} {:.2}",
