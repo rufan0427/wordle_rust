@@ -1,8 +1,8 @@
 use colored::Colorize;
+use rand::SeedableRng;
 use rand::seq::SliceRandom;
 use serde_json::map::Iter;
 use serde_json::value;
-use rand::SeedableRng;
 use std::char;
 use std::collections::HashMap;
 use std::io::{self, Write};
@@ -37,11 +37,10 @@ struct Cli {
     diff_verbos: bool,
     #[arg(short = 't', long = "stats")]
     status_verbos: bool,
-    #[arg(short = 'd',long = "day",default_value_t = 1)]
-    days:usize,
-    #[arg(short = 's',long = "seed")]
-    seed:Option<u64>
-
+    #[arg(short = 'd', long = "day", default_value_t = 1)]
+    days: usize,
+    #[arg(short = 's', long = "seed")]
+    seed: Option<u64>,
 }
 
 //for reactive mood,output the guess result history
@@ -55,13 +54,17 @@ fn play_tty(
     answer_list: &mut Vec<String>,
     guess_list: &mut BTreeMap<String, i32>,
     final_list: &Vec<&str>,
-    id:usize
+    id: usize,
 ) -> i32 {
     let mut game_record: Vec<GameHistory> = Vec::new();
     if let Some(_) = cli.words {
-            if cli.days != 1 {return 10000;}
-            if let Some(__)=cli.seed{return 10000;}
-        } 
+        if cli.days != 1 {
+            return 10000;
+        }
+        if let Some(__) = cli.seed {
+            return 10000;
+        }
+    }
     if cli.rand_verbos {
         if let Some(_) = cli.words {
             return 10000;
@@ -80,19 +83,18 @@ fn play_tty(
 
     // word-given mood switch
     let mut answer_word: String;
-    
+
     if cli.rand_verbos {
-        if cli.days==1{
-        let rand_index = rand::thread_rng().gen_range(0..FINAL.len());
-        answer_word = FINAL[rand_index].to_string();
-        while answer_list.contains(&answer_word.clone()) {
+        if cli.days == 1 {
             let rand_index = rand::thread_rng().gen_range(0..FINAL.len());
             answer_word = FINAL[rand_index].to_string();
-        }}
-        else{
-            answer_word=final_list[id % final_list.len()].to_string()
+            while answer_list.contains(&answer_word.clone()) {
+                let rand_index = rand::thread_rng().gen_range(0..FINAL.len());
+                answer_word = FINAL[rand_index].to_string();
+            }
+        } else {
+            answer_word = final_list[id % final_list.len()].to_string()
         }
-
     } else if let Some(x) = &cli.words {
         answer_word = x.clone();
     } else {
@@ -250,29 +252,33 @@ fn play_dis_tty(
     answer_list: &mut Vec<String>,
     guess_list: &mut BTreeMap<String, i32>,
     final_list: &Vec<&str>,
-    id:usize
+    id: usize,
 ) -> i32 {
     let mut answer_word: String;
     if let Some(_) = cli.words {
-            if cli.days != 1 {return 10000;}
-            if let Some(__)=cli.seed{return 10000;}
-        } 
+        if cli.days != 1 {
+            return 10000;
+        }
+        if let Some(__) = cli.seed {
+            return 10000;
+        }
+    }
     if cli.rand_verbos {
         if let Some(_) = cli.words {
             return 10000;
         }
     }
     if cli.rand_verbos {
-        if cli.days==1{
-        let rand_index = rand::thread_rng().gen_range(0..FINAL.len());
-        answer_word = FINAL[rand_index].to_string();
-        while answer_list.contains(&answer_word.clone()) {
+        if cli.days == 1 {
             let rand_index = rand::thread_rng().gen_range(0..FINAL.len());
             answer_word = FINAL[rand_index].to_string();
-        }}
-        else{
+            while answer_list.contains(&answer_word.clone()) {
+                let rand_index = rand::thread_rng().gen_range(0..FINAL.len());
+                answer_word = FINAL[rand_index].to_string();
+            }
+        } else {
             //println!("{} {} {:?}",final_list.len(),id,final_list.iter().position(|&x| x == "photo"));
-            answer_word=final_list[id % final_list.len()].to_string()
+            answer_word = final_list[id % final_list.len()].to_string()
         }
     } else if let Some(x) = &cli.words {
         answer_word = x.clone();
@@ -418,21 +424,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     let mut answer_list: Vec<String> = Vec::new();
     let mut guess_list: BTreeMap<String, i32> = BTreeMap::new();
-    let mut final_list: Vec<&str> = FINAL.to_vec(); 
+    let mut final_list: Vec<&str> = FINAL.to_vec();
     let mut rng = if let Some(seed) = cli.seed {
-                    StdRng::seed_from_u64(seed)
-                    } else {
-                        StdRng::seed_from_u64(42)
-                    };
+        StdRng::seed_from_u64(seed)
+    } else {
+        StdRng::seed_from_u64(42)
+    };
     final_list.shuffle(&mut rng);
-    
+
     if is_tty {
         match cli.words {
             Some(ref _x) => {
-                let success_flag = play_tty(&cli, &mut answer_list, &mut guess_list,&final_list,cli.days-1);
-                if success_flag == 10000{
-                        return Err(String::from("mood mix!").into());
-                    }
+                let success_flag = play_tty(
+                    &cli,
+                    &mut answer_list,
+                    &mut guess_list,
+                    &final_list,
+                    cli.days - 1,
+                );
+                if success_flag == 10000 {
+                    return Err(String::from("mood mix!").into());
+                }
                 Ok(())
             }
 
@@ -441,9 +453,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut success_record: i32 = 0;
                 let mut try_record: i32 = 0;
                 loop {
-                    let success_flag = play_tty(&cli, &mut answer_list, &mut guess_list,&final_list,cli.days-1+turns_record as usize);
+                    let success_flag = play_tty(
+                        &cli,
+                        &mut answer_list,
+                        &mut guess_list,
+                        &final_list,
+                        cli.days - 1 + turns_record as usize,
+                    );
                     turns_record += 1;
-                    if success_flag == 10000{
+                    if success_flag == 10000 {
                         return Err(String::from("mood mix!").into());
                     }
                     if success_flag > 0 {
@@ -486,10 +504,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         match cli.words {
             Some(ref _x) => {
-                let success_flag = play_dis_tty(&cli, &mut answer_list, &mut guess_list,&final_list,cli.days-1);
-                if success_flag == 10000{
-                        return Err(String::from("mood mix!").into());
-                    }
+                let success_flag = play_dis_tty(
+                    &cli,
+                    &mut answer_list,
+                    &mut guess_list,
+                    &final_list,
+                    cli.days - 1,
+                );
+                if success_flag == 10000 {
+                    return Err(String::from("mood mix!").into());
+                }
                 Ok(())
             }
             None => {
@@ -497,9 +521,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut success_record: i32 = 0;
                 let mut try_record: i32 = 0;
                 loop {
-                    let success_flag = play_dis_tty(&cli, &mut answer_list, &mut guess_list,&final_list,(cli.days-1)+turns_record as usize);
+                    let success_flag = play_dis_tty(
+                        &cli,
+                        &mut answer_list,
+                        &mut guess_list,
+                        &final_list,
+                        (cli.days - 1) + turns_record as usize,
+                    );
                     turns_record += 1;
-                    if success_flag == 10000{
+                    if success_flag == 10000 {
                         return Err(String::from("mood mix!").into());
                     }
                     if success_flag > 0 {
