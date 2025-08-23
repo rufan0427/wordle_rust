@@ -8,6 +8,7 @@ use builtin_words::FINAL;
 use clap::Parser;
 use rand::Rng;
 
+//help print colorful chracters
 fn pr(c: char) {
     match &c {
         'R' => print!("{}", "R".bold().red()),
@@ -18,6 +19,7 @@ fn pr(c: char) {
     }
 }
 
+//commond-line argments parser
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
@@ -27,6 +29,7 @@ struct Cli {
     rand_verbos: bool,
 }
 
+//for reactive mood,output the guess result history
 struct GameHistory {
     s_status_history: Vec<char>,
     char_status_history: Vec<char>,
@@ -50,6 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Welcome to wordle, {}!", line.trim());
         io::stdout().flush().unwrap();
 
+        // word-given mood switch
         let mut answer_word = String::new();
         if cli.rand_verbos {
             let rand_index = rand::thread_rng().gen_range(0..FINAL.len());
@@ -64,9 +68,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             io::stdout().flush().unwrap();
         }
 
-        let mut chracter_status: Vec<char> = ['X'; 26].to_vec();
-        let answer_word_vector: Vec<char> = answer_word.chars().collect();
-        let mut appearance: HashMap<char, i32> = HashMap::new();
+        let mut chracter_status: Vec<char> = ['X'; 26].to_vec();//total status for 26 characters
+        let answer_word_vector: Vec<char> = answer_word.chars().collect();//transform str into list
+        let mut appearance: HashMap<char, i32> = HashMap::new();// each chracter's number in answer word
         for c in answer_word.chars() {
             let pos = appearance.entry(c).or_insert(0);
             *pos += 1;
@@ -78,21 +82,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         while turn < 6 {
             println!("You have {} chance left,Input you guess:", 6 - turn);
             io::stdin().read_line(&mut guess)?;
-            guess = guess.to_lowercase();
+            guess = guess.to_lowercase();//convenient for vertify
 
-            let mut guess_word_vector: Vec<char> = guess.chars().collect();
-            let mut guess_appearance = appearance.clone();
-            let mut s_status: Vec<char> = ['R'; 5].to_vec();
-            let mut input_flag: bool = true;
+            let mut guess_word_vector: Vec<char> = guess.chars().collect();//transform str into list
+            let mut guess_appearance = appearance.clone();// required number in guess word,for vertify overplus 
+            let mut s_status: Vec<char> = ['R'; 5].to_vec();//// each chracter's status in guess word,default='R'
+            let mut input_flag: bool = true;//legal input
 
-            if !(ACCEPTABLE.contains(&guess.trim())) {
+            if !(ACCEPTABLE.contains(&guess.trim())) { //not  in ACCEPTABLE
                 println!("INVALID");
                 input_flag = false;
-            } else if guess.len() != 6 {
+            } else if guess.len() != 6 {  
                 println!("INVALID");
                 input_flag = false;
             } else {
-                for i in 0..5 {
+                for i in 0..5 {//chracter
                     if !((guess_word_vector[i] >= 'A' && guess_word_vector[i] <= 'Z')
                         || (guess_word_vector[i] >= 'a' && guess_word_vector[i] <= 'z'))
                     {
@@ -107,18 +111,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if guess_word_vector[i] == answer_word_vector[i] {
                         s_status[i] = 'G';
                         *guess_appearance.entry(answer_word_vector[i]).or_insert(0) -= 1;
-                    }
+                    }//give 'G'
                 }
                 for i in 0..5 {
                     if guess_word_vector[i] != answer_word_vector[i] {
                         if let Some(&x) = guess_appearance.get(&guess_word_vector[i]) {
-                            if x > 0 {
+                            if x > 0 {//don't overplus
                                 s_status[i] = 'Y';
                                 *guess_appearance.entry(guess_word_vector[i]).or_insert(0) -= 1;
                             }
                         }
                     }
-                    match s_status[i] {
+                    match s_status[i] {//renew the character's status
                         'G' => {
                             chracter_status[((guess_word_vector[i] as u8) - b'a') as usize] = 'G'
                         }
@@ -177,13 +181,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !flag {
             println!("Answer:{}", answer_word.to_uppercase());
         }
-
-    // // example: print arguments
-    // print!("Command line arguments: ");
-    // for arg in std::env::args() {
-    //     print!("{} ", arg);
-    // }
-    // // TODO: parse the arguments in `args`
     } else {
         let mut answer_word = String::new();
         if cli.rand_verbos {
