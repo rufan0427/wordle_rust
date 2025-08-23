@@ -5,6 +5,7 @@ use serde_json::map::Iter;
 use serde_json::value;
 use std::char;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::io::{self, Write};
 mod builtin_words;
 use builtin_words::ACCEPTABLE;
@@ -13,6 +14,8 @@ use clap::Parser;
 use rand::Rng;
 use rand::rngs::StdRng;
 use std::collections::BTreeMap;
+use std::path::PathBuf;
+
 
 //help print colorful chracters
 fn pr(c: char) {
@@ -41,6 +44,10 @@ struct Cli {
     days: usize,
     #[arg(short = 's', long = "seed")]
     seed: Option<u64>,
+    #[arg(short = 'f', long = "final-set")]
+    final_repo: Option<PathBuf>,
+    #[arg(short = 'a', long = "acceptable-set")]
+    accept_repo:Option<PathBuf>,
 }
 
 //for reactive mood,output the guess result history
@@ -53,7 +60,8 @@ fn play_tty(
     cli: &Cli,
     answer_list: &mut Vec<String>,
     guess_list: &mut BTreeMap<String, i32>,
-    final_list: &Vec<&str>,
+    final_list: &Vec<String>,
+    accept_list:&Vec<String>,
     id: usize,
 ) -> i32 {
     let mut game_record: Vec<GameHistory> = Vec::new();
@@ -132,7 +140,7 @@ fn play_tty(
         let mut s_status: Vec<char> = ['R'; 5].to_vec(); //// each chracter's status in guess word,default='R'
         let mut input_flag: bool = true; //legal input
 
-        if !(ACCEPTABLE.contains(&guess.trim())) {
+        if !(accept_list.contains(&guess.trim().to_string())) {
             //not  in ACCEPTABLE
             input_flag = false;
         } else if guess.len() != 6 {
@@ -251,7 +259,8 @@ fn play_dis_tty(
     cli: &Cli,
     answer_list: &mut Vec<String>,
     guess_list: &mut BTreeMap<String, i32>,
-    final_list: &Vec<&str>,
+    final_list: &Vec<String>,
+    accept_list:&Vec<String>,
     id: usize,
 ) -> i32 {
     let mut answer_word: String;
@@ -315,7 +324,7 @@ fn play_dis_tty(
         let mut s_status: Vec<char> = ['R'; 5].to_vec();
         let mut input_flag: bool = true;
 
-        if !(ACCEPTABLE.contains(&guess.trim())) {
+        if !(accept_list.contains(&guess.trim().to_string())) {
             //not  in ACCEPTABLE
             input_flag = false;
         } else if guess.len() != 6 {
@@ -419,18 +428,86 @@ fn play_dis_tty(
         return 0;
     }
 }
+
+fn load_word_list(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let content = std::fs::read_to_string(path)?;
+    let words: Vec<String> = content
+        .lines()
+        .map(|line| line.trim().to_lowercase())
+        .filter(|word| !word.is_empty())
+        .collect();
+    
+    if words.is_empty() {
+        return Err("Empty".into());
+    }
+    let unique_words: HashSet<&str> = words.iter().map(|x| &x[..]).collect();
+    if unique_words.len() != words.len() {
+        return Err("repeat".into());
+    }
+    let final_set: HashSet<&str> = FINAL.iter().copied().collect();
+    if !unique_words.is_subset(&final_set) {
+        return Err("not subset".into());
+    }
+    let mut sorted_words = words;
+    sorted_words.sort();
+    return Ok(sorted_words)
+}
+
+fn load_accept_list(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let content = std::fs::read_to_string(path)?;
+    let words: Vec<String> = content
+        .lines()
+        .map(|line| line.trim().to_lowercase())
+        .filter(|word| !word.is_empty())
+        .collect();
+    
+    if words.is_empty() {
+        return Err("Empty".into());
+    }
+    let unique_words: HashSet<&str> = words.iter().map(|x| &x[..]).collect();
+    if unique_words.len() != words.len() {
+        return Err("repeat".into());
+    }
+    let final_set: HashSet<&str> = ACCEPTABLE.iter().copied().collect();
+    if !unique_words.is_subset(&final_set) {
+        return Err("not subset".into());
+    }
+    let mut sorted_words = words;
+    sorted_words.sort();
+    return Ok(sorted_words)
+}
+
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let is_tty = atty::is(atty::Stream::Stdout);
     let cli = Cli::parse();
     let mut answer_list: Vec<String> = Vec::new();
     let mut guess_list: BTreeMap<String, i32> = BTreeMap::new();
-    let mut final_list: Vec<&str> = FINAL.to_vec();
+
+    let mut final_list: Vec<String>;
+    if let Some(ref x)=cli.final_repo{
+        match load_word_list(&x){
+            std::result::Result::Ok(x)=>final_list=x,
+            std::result::Result::Err(_x) => return Err(String::from("load error").into()),
+        } 
+    }
+    else {
+        final_list= FINAL.iter().map(|&s| s.to_string()).collect();
+    }
     let mut rng = if let Some(seed) = cli.seed {
         StdRng::seed_from_u64(seed)
     } else {
         StdRng::seed_from_u64(42)
     };
     final_list.shuffle(&mut rng);
+
+    let accept_list:Vec<String>;
+    if let Some(ref x)=cli.accept_repo{
+        accept_list= load_accept_list(&x).unwrap();
+    }
+    else {
+        accept_list= ACCEPTABLE.iter().map(|&s| s.to_string()).collect();
+    }
 
     if is_tty {
         match cli.words {
@@ -440,6 +517,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     &mut answer_list,
                     &mut guess_list,
                     &final_list,
+                    &accept_list,
                     cli.days - 1,
                 );
                 if success_flag == 10000 {
@@ -458,6 +536,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         &mut answer_list,
                         &mut guess_list,
                         &final_list,
+                        &accept_list,
                         cli.days - 1 + turns_record as usize,
                     );
                     turns_record += 1;
@@ -509,6 +588,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     &mut answer_list,
                     &mut guess_list,
                     &final_list,
+                    &accept_list,
                     cli.days - 1,
                 );
                 if success_flag == 10000 {
@@ -526,6 +606,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         &mut answer_list,
                         &mut guess_list,
                         &final_list,
+                        &accept_list,
                         (cli.days - 1) + turns_record as usize,
                     );
                     turns_record += 1;
