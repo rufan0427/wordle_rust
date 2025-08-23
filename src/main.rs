@@ -27,6 +27,8 @@ struct Cli {
     words: Option<String>,
     #[arg(short = 'r', long = "random")]
     rand_verbos: bool,
+    #[arg(short = 'D', long = "difficult")]
+    diff_verbos: bool,
 }
 
 //for reactive mood,output the guess result history
@@ -68,9 +70,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             io::stdout().flush().unwrap();
         }
 
-        let mut chracter_status: Vec<char> = ['X'; 26].to_vec();//total status for 26 characters
-        let answer_word_vector: Vec<char> = answer_word.chars().collect();//transform str into list
-        let mut appearance: HashMap<char, i32> = HashMap::new();// each chracter's number in answer word
+        let mut chracter_status: Vec<char> = ['X'; 26].to_vec(); //total status for 26 characters
+        let answer_word_vector: Vec<char> = answer_word.chars().collect(); //transform str into list
+        let mut appearance: HashMap<char, i32> = HashMap::new(); // each chracter's number in answer word
         for c in answer_word.chars() {
             let pos = appearance.entry(c).or_insert(0);
             *pos += 1;
@@ -79,56 +81,77 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut guess = String::new();
         let mut turn = 1;
         let mut flag: bool = false;
-        while turn < 6 {
-            println!("You have {} chance left,Input you guess:", 6 - turn);
+        let mut green_list: Vec<(char, i32)> = Vec::new();
+        let mut yellow_list: Vec<char> = Vec::new();
+
+        while turn <= 6 {
+            println!("You have {} chance left,Input you guess:", 7 - turn);
             io::stdin().read_line(&mut guess)?;
-            guess = guess.to_lowercase();//convenient for vertify
+            guess = guess.to_lowercase(); //convenient for vertify
 
-            let mut guess_word_vector: Vec<char> = guess.chars().collect();//transform str into list
-            let mut guess_appearance = appearance.clone();// required number in guess word,for vertify overplus 
-            let mut s_status: Vec<char> = ['R'; 5].to_vec();//// each chracter's status in guess word,default='R'
-            let mut input_flag: bool = true;//legal input
+            let mut guess_word_vector: Vec<char> = guess.chars().collect(); //transform str into list
+            let mut guess_appearance = appearance.clone(); // required number in guess word,for vertify overplus 
+            let mut s_status: Vec<char> = ['R'; 5].to_vec(); //// each chracter's status in guess word,default='R'
+            let mut input_flag: bool = true; //legal input
 
-            if !(ACCEPTABLE.contains(&guess.trim())) { //not  in ACCEPTABLE
-                println!("INVALID");
+            if !(ACCEPTABLE.contains(&guess.trim())) {
+                //not  in ACCEPTABLE
                 input_flag = false;
-            } else if guess.len() != 6 {  
-                println!("INVALID");
+            } else if guess.len() != 6 {
                 input_flag = false;
+            } else if cli.diff_verbos {
+                for iter in green_list.iter() {
+                    if guess_word_vector[iter.1 as usize] != iter.0 {
+                        input_flag = false;
+                        break;
+                    }
+                }
+                for iter in yellow_list.iter() {
+                    if !guess.contains(*iter) {
+                        input_flag = false;
+                        break;
+                    }
+                }
             } else {
-                for i in 0..5 {//chracter
+                for i in 0..5 {
+                    //chracter
                     if !((guess_word_vector[i] >= 'A' && guess_word_vector[i] <= 'Z')
                         || (guess_word_vector[i] >= 'a' && guess_word_vector[i] <= 'z'))
                     {
-                        println!("INVALID");
                         input_flag = false;
                         break;
                     }
                 }
             }
+            if !input_flag {println!("INVALID");}
+            
             if input_flag {
                 for i in 0..5 {
                     if guess_word_vector[i] == answer_word_vector[i] {
                         s_status[i] = 'G';
                         *guess_appearance.entry(answer_word_vector[i]).or_insert(0) -= 1;
-                    }//give 'G'
+                    } //give 'G'
                 }
                 for i in 0..5 {
                     if guess_word_vector[i] != answer_word_vector[i] {
                         if let Some(&x) = guess_appearance.get(&guess_word_vector[i]) {
-                            if x > 0 {//don't overplus
+                            if x > 0 {
+                                //don't overplus
                                 s_status[i] = 'Y';
                                 *guess_appearance.entry(guess_word_vector[i]).or_insert(0) -= 1;
                             }
                         }
                     }
-                    match s_status[i] {//renew the character's status
+                    match s_status[i] {
+                        //renew the character's status
                         'G' => {
+                            green_list.push((guess_word_vector[i], i as i32));
                             chracter_status[((guess_word_vector[i] as u8) - b'a') as usize] = 'G'
                         }
                         'Y' if chracter_status[((guess_word_vector[i] as u8) - b'a') as usize]
                             != 'G' =>
                         {
+                            yellow_list.push(guess_word_vector[i]);
                             chracter_status[((guess_word_vector[i] as u8) - b'a') as usize] = 'Y'
                         }
                         'R' if (chracter_status
@@ -206,6 +229,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut guess = String::new();
         let mut turn = 1;
         let mut flag: bool = false;
+        let mut green_list: Vec<(char, i32)> = Vec::new();
+        let mut yellow_list: Vec<char> = Vec::new();
+
         while turn <= 6 {
             io::stdin().read_line(&mut guess)?;
             guess = guess.to_lowercase();
@@ -216,22 +242,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut input_flag: bool = true;
 
             if !(ACCEPTABLE.contains(&guess.trim())) {
-                println!("INVALID");
+                //not  in ACCEPTABLE
                 input_flag = false;
             } else if guess.len() != 6 {
-                println!("INVALID");
                 input_flag = false;
+            } else if cli.diff_verbos {
+                for iter in green_list.iter() {
+                    if guess_word_vector[iter.1 as usize] != iter.0 {
+                        input_flag = false;
+                        break;
+                    }
+                }
+                for iter in yellow_list.iter() {
+                    if !guess.contains(*iter) {
+                        input_flag = false;
+                        break;
+                    }
+                }
             } else {
                 for i in 0..5 {
+                    //chracter
                     if !((guess_word_vector[i] >= 'A' && guess_word_vector[i] <= 'Z')
                         || (guess_word_vector[i] >= 'a' && guess_word_vector[i] <= 'z'))
                     {
-                        println!("INVALID");
                         input_flag = false;
                         break;
                     }
                 }
             }
+            if !input_flag {println!("INVALID");}
 
             if input_flag {
                 for i in 0..5 {
@@ -251,11 +290,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     match s_status[i] {
                         'G' => {
+                            green_list.push((guess_word_vector[i], i as i32));
                             chracter_status[((guess_word_vector[i] as u8) - b'a') as usize] = 'G'
                         }
                         'Y' if chracter_status[((guess_word_vector[i] as u8) - b'a') as usize]
                             != 'G' =>
                         {
+                            yellow_list.push(guess_word_vector[i]);
                             chracter_status[((guess_word_vector[i] as u8) - b'a') as usize] = 'Y'
                         }
                         'R' if (chracter_status
