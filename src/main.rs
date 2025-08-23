@@ -5,6 +5,7 @@ use std::io::{self, Write};
 mod builtin_words;
 use builtin_words::ACCEPTABLE;
 use builtin_words::FINAL;
+use clap::Parser;
 use rand::Rng;
 
 fn pr(c: char) {
@@ -17,6 +18,15 @@ fn pr(c: char) {
     }
 }
 
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Cli {
+    #[arg(short = 'w', long = "word")]
+    words: Option<String>,
+    #[arg(short = 'r', long = "random")]
+    rand_verbos: bool,
+}
+
 struct GameHistory {
     s_status_history: Vec<char>,
     char_status_history: Vec<char>,
@@ -24,6 +34,8 @@ struct GameHistory {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cli = Cli::parse();
+
     let is_tty = atty::is(atty::Stream::Stdout);
     let mut game_record: Vec<GameHistory> = Vec::new();
     if is_tty {
@@ -37,13 +49,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         io::stdin().read_line(&mut line)?;
         println!("Welcome to wordle, {}!", line.trim());
         io::stdout().flush().unwrap();
-        print!("Input the answer word:");
-        io::stdout().flush().unwrap();
+
         let mut answer_word = String::new();
-        io::stdin().read_line(&mut answer_word)?;
-        // let rand_index = rand::thread_rng().gen_range(0..FINAL.len());
-        // let answer_word = FINAL[rand_index];
-        io::stdout().flush().unwrap();
+        if cli.rand_verbos {
+            let rand_index = rand::thread_rng().gen_range(0..FINAL.len());
+            answer_word = FINAL[rand_index].to_string();
+        } else if let Some(x) = cli.words {
+            answer_word = x.clone();
+        } else {
+            print!("Input the answer word:");
+            io::stdout().flush().unwrap();
+            answer_word = String::new();
+            io::stdin().read_line(&mut answer_word)?;
+            io::stdout().flush().unwrap();
+        }
 
         let mut chracter_status: Vec<char> = ['X'; 26].to_vec();
         let answer_word_vector: Vec<char> = answer_word.chars().collect();
@@ -166,13 +185,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // }
     // // TODO: parse the arguments in `args`
     } else {
-        // let rand_index = rand::thread_rng().gen_range(0..FINAL.len());
-        // let answer_word = FINAL[rand_index];
-        // println!("{}",answer_word)
         let mut answer_word = String::new();
-        io::stdin().read_line(&mut answer_word)?;
-        // let rand_index = rand::thread_rng().gen_range(0..FINAL.len());
-        // let answer_word = FINAL[rand_index];
+        if cli.rand_verbos {
+            let rand_index = rand::thread_rng().gen_range(0..FINAL.len());
+            answer_word = FINAL[rand_index].to_string();
+        } else if let Some(x) = cli.words {
+            answer_word = x.clone();
+        } else {
+            answer_word = String::new();
+            io::stdin().read_line(&mut answer_word)?;
+            io::stdout().flush().unwrap();
+        }
         io::stdout().flush().unwrap();
 
         let mut chracter_status: Vec<char> = ['X'; 26].to_vec();
