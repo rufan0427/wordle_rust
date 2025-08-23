@@ -38,13 +38,9 @@ struct GameHistory {
     guesses: String,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli = Cli::parse();
-
-    let is_tty = atty::is(atty::Stream::Stdout);
+fn play_tty(cli:&Cli)-> Result<(), Box<dyn std::error::Error>>{
     let mut game_record: Vec<GameHistory> = Vec::new();
-    if is_tty {
-        println!(
+    println!(
             "I am in a tty. Please print {}!",
             "colorful characters".bold().red()
         );
@@ -60,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if cli.rand_verbos {
             let rand_index = rand::thread_rng().gen_range(0..FINAL.len());
             answer_word = FINAL[rand_index].to_string();
-        } else if let Some(x) = cli.words {
+        } else if let Some(x) = &cli.words {
             answer_word = x.clone();
         } else {
             print!("Input the answer word:");
@@ -124,7 +120,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             if !input_flag {println!("INVALID");}
-            
+
             if input_flag {
                 for i in 0..5 {
                     if guess_word_vector[i] == answer_word_vector[i] {
@@ -204,12 +200,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !flag {
             println!("Answer:{}", answer_word.to_uppercase());
         }
-    } else {
-        let mut answer_word = String::new();
+        Ok(())
+}
+
+fn play_dis_tty(cli:&Cli) -> Result<(), Box<dyn std::error::Error>>{
+    
+    let mut game_record: Vec<GameHistory> = Vec::new();
+    let mut answer_word = String::new();
         if cli.rand_verbos {
             let rand_index = rand::thread_rng().gen_range(0..FINAL.len());
             answer_word = FINAL[rand_index].to_string();
-        } else if let Some(x) = cli.words {
+        } else if let Some(x) = &cli.words {
             answer_word = x.clone();
         } else {
             answer_word = String::new();
@@ -340,6 +341,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             println!("FAILED {}", answer_word.to_uppercase());
         }
+        Ok(())
+}
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let is_tty = atty::is(atty::Stream::Stdout);
+    let cli = Cli::parse();
+    if is_tty {
+        return play_tty(&cli);
+    } else {
+        return play_dis_tty(&cli);
     }
-    Ok(())
 }
