@@ -12,6 +12,7 @@ console = "0.16"
 colored = "3.0.0"
 rand = "0.8.5"
 clap = { version = "4.5.45", features = ["derive"] }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
 
 [dev-dependencies]
 assert-json-diff = "2.0"

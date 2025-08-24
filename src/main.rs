@@ -1,11 +1,10 @@
 use colored::Colorize;
 use rand::SeedableRng;
 use rand::seq::SliceRandom;
-use serde_json::map::Iter;
-use serde_json::value;
 use std::char;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fs::File;
 use std::io::{self, Write};
 mod builtin_words;
 use builtin_words::ACCEPTABLE;
@@ -13,7 +12,9 @@ use builtin_words::FINAL;
 use clap::Parser;
 use rand::Rng;
 use rand::rngs::StdRng;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::io::BufReader;
 use std::path::PathBuf;
 
 //help print colorful chracters
@@ -47,6 +48,8 @@ struct Cli {
     final_repo: Option<PathBuf>,
     #[arg(short = 'a', long = "acceptable-set")]
     accept_repo: Option<PathBuf>,
+    #[arg(short = 'S', long = "state")]
+    state: Option<PathBuf>,
 }
 
 //for reactive mood,output the guess result history
@@ -55,14 +58,31 @@ struct GameHistory {
     char_status_history: Vec<char>,
 }
 
+#[derive(Serialize, Deserialize)]
+struct JsonState {
+    total_rounds: i32,
+    games: Vec<Game>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Game {
+    answer: String,
+    guesses: Vec<String>,
+}
+
 fn play_tty(
     cli: &Cli,
     answer_list: &mut Vec<String>,
     guess_list: &mut BTreeMap<String, i32>,
     final_list: &Vec<String>,
     accept_list: &Vec<String>,
+    json_data: &mut JsonState,
     id: usize,
 ) -> i32 {
+    let mut game: Game = Game {
+        answer: String::new(),
+        guesses: Vec::new(),
+    };
     let mut game_record: Vec<GameHistory> = Vec::new();
     if let Some(_) = cli.words {
         if cli.days != 1 {
@@ -114,6 +134,7 @@ fn play_tty(
         //io::stdout().flush().unwrap();
     }
     answer_list.push(answer_word.clone());
+    game.answer = answer_word.to_uppercase().clone();
 
     let mut chracter_status: Vec<char> = ['X'; 26].to_vec(); //total status for 26 characters
     let answer_word_vector: Vec<char> = answer_word.chars().collect(); //transform str into list
@@ -173,7 +194,9 @@ fn play_tty(
         }
 
         if input_flag {
-            *guess_list.entry(guess.trim().to_string()).or_insert(0) += 1;
+            *guess_list.entry(guess.trim().to_string().to_uppercase()).or_insert(0) += 1;
+            game.guesses.push(guess.trim().to_uppercase().to_string());
+
             for i in 0..5 {
                 if guess_word_vector[i] == answer_word_vector[i] {
                     s_status[i] = 'G';
@@ -245,6 +268,7 @@ fn play_tty(
         guess_appearance.clear();
         guess_word_vector.clear();
     }
+    json_data.games.push(game);
     turn -= 1;
     println!("Guess turns:{}", turn);
     if !flag {
@@ -260,8 +284,13 @@ fn play_dis_tty(
     guess_list: &mut BTreeMap<String, i32>,
     final_list: &Vec<String>,
     accept_list: &Vec<String>,
+    json_data: &mut JsonState,
     id: usize,
 ) -> i32 {
+    let mut game: Game = Game {
+        answer: String::new(),
+        guesses: Vec::new(),
+    };
     let mut answer_word: String;
     if let Some(_) = cli.words {
         if cli.days != 1 {
@@ -298,6 +327,7 @@ fn play_dis_tty(
         //io::stdout().flush().unwrap();
     }
     answer_list.push(answer_word.clone());
+    game.answer = answer_word.to_uppercase().clone();
     io::stdout().flush().unwrap();
 
     let mut chracter_status: Vec<char> = ['X'; 26].to_vec();
@@ -358,6 +388,8 @@ fn play_dis_tty(
 
         if input_flag {
             *guess_list.entry(guess.trim().to_string()).or_insert(0) += 1;
+            game.guesses.push(guess.trim().to_uppercase().to_string());
+
             for i in 0..5 {
                 if guess_word_vector[i] == answer_word_vector[i] {
                     s_status[i] = 'G';
@@ -418,7 +450,7 @@ fn play_dis_tty(
         guess_appearance.clear();
         guess_word_vector.clear();
     }
-
+    json_data.games.push(game);
     if flag {
         println!("CORRECT {}", turn);
         return turn;
@@ -476,9 +508,35 @@ fn load_accept_list(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::error::E
     return Ok(sorted_words);
 }
 
+fn load_state_json(path: &PathBuf) -> Result<JsonState, Box<dyn std::error::Error>> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+    let u = serde_json::from_reader(reader)?;
+    Ok(u)
+}
+
+fn write_state_json(
+    path: &PathBuf,
+    json_data: &JsonState,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::create(path)?;
+    serde_json::to_writer_pretty(file, &json_data)?;
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let is_tty = atty::is(atty::Stream::Stdout);
     let cli = Cli::parse();
+    let mut json_data: JsonState = JsonState {
+        total_rounds: 0,
+        games: Vec::new(),
+    };
+    if let Some(ref __) = cli.state {
+        match load_state_json(&cli.state.clone().unwrap()) {
+            Result::Ok(x) => json_data = x,
+            Err(_) => json_data.total_rounds = 0,
+        }
+    }
     let mut answer_list: Vec<String> = Vec::new();
     let mut guess_list: BTreeMap<String, i32> = BTreeMap::new();
 
@@ -514,6 +572,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     &mut guess_list,
                     &final_list,
                     &accept_list,
+                    &mut json_data,
                     cli.days - 1,
                 );
                 if success_flag == 10000 {
@@ -526,6 +585,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut turns_record: i32 = 0;
                 let mut success_record: i32 = 0;
                 let mut try_record: i32 = 0;
+                if let Some(__) = &cli.state {
+                    for iter in json_data.games.iter(){
+                        if iter.guesses[iter.guesses.len()-1]==iter.answer {
+                            success_record+=1;
+                            try_record+=iter.guesses.len() as i32;
+                        }
+                        for words_iter in 0..iter.guesses.len(){
+                            *guess_list.entry(iter.guesses[words_iter].trim().to_lowercase().to_string()).or_insert(0) += 1;
+                        }
+                    }
+                }
                 loop {
                     let success_flag = play_tty(
                         &cli,
@@ -533,9 +603,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         &mut guess_list,
                         &final_list,
                         &accept_list,
+                        &mut json_data,
                         cli.days - 1 + turns_record as usize,
                     );
                     turns_record += 1;
+                    json_data.total_rounds += 1;
                     if success_flag == 10000 {
                         return Err(String::from("mood mix!").into());
                     }
@@ -543,25 +615,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         success_record += 1;
                         try_record += success_flag;
                     }
-
+                    if let Some(x) = &cli.state {
+                        write_state_json(x, &json_data)?;
+                    }
                     if cli.status_verbos {
                         //io::stdout().flush().unwrap();
                         if success_record > 0 {
                             println!(
                                 "{} {} {:.2}",
                                 success_record,
-                                turns_record - success_record,
+                                json_data.total_rounds - success_record,
                                 try_record as f32 / success_record as f32
                             );
                         } else {
-                            println!("0 {} 0.00", turns_record - success_record);
+                            println!("0 {} 0.00", json_data.total_rounds - success_record);
                         }
                         //io::stdout().flush().unwrap();
                         let mut entries: Vec<(&String, &i32)> = guess_list.iter().collect();
                         entries.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
                         for iter in entries.iter().take(5) {
                             io::stdout().flush().unwrap();
-                            print!("{} {} ", iter.0, iter.1);
+                            print!("{} {} ", iter.0.to_uppercase(), iter.1);
                         }
                         println!("{}", ' ');
                     }
@@ -585,6 +659,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     &mut guess_list,
                     &final_list,
                     &accept_list,
+                    &mut json_data,
                     cli.days - 1,
                 );
                 if success_flag == 10000 {
@@ -596,6 +671,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut turns_record: i32 = 0;
                 let mut success_record: i32 = 0;
                 let mut try_record: i32 = 0;
+                if let Some(__) = &cli.state {
+                    for iter in json_data.games.iter(){
+                        if iter.guesses[iter.guesses.len()-1]==iter.answer {
+                            success_record+=1;
+                            try_record+=iter.guesses.len() as i32;
+                        }
+                        for words_iter in 0..iter.guesses.len(){
+                            let key = iter.guesses[words_iter].trim().to_string().to_lowercase();
+                            *guess_list.entry(key).or_insert(0) += 1;
+                        }
+                    }
+                    println!("abc");
+                }
                 loop {
                     let success_flag = play_dis_tty(
                         &cli,
@@ -603,9 +691,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         &mut guess_list,
                         &final_list,
                         &accept_list,
+                        &mut json_data,
                         (cli.days - 1) + turns_record as usize,
                     );
                     turns_record += 1;
+                    json_data.total_rounds += 1;
                     if success_flag == 10000 {
                         return Err(String::from("mood mix!").into());
                     }
@@ -613,18 +703,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         success_record += 1;
                         try_record += success_flag;
                     }
-
+                    if let Some(x) = &cli.state {
+                        write_state_json(x, &json_data)?;
+                    }
                     if cli.status_verbos {
                         //io::stdout().flush().unwrap();
                         if success_record > 0 {
                             println!(
                                 "{} {} {:.2}",
                                 success_record,
-                                turns_record - success_record,
+                                json_data.total_rounds - success_record,
                                 try_record as f32 / success_record as f32
                             );
                         } else {
-                            println!("0 {} 0.00", turns_record - success_record);
+                            println!("0 {} 0.00", json_data.total_rounds - success_record);
                         }
                         io::stdout().flush().unwrap();
                         let mut entries: Vec<(&String, &i32)> = guess_list.iter().collect();
