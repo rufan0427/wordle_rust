@@ -10,13 +10,13 @@ mod builtin_words;
 use builtin_words::ACCEPTABLE;
 use builtin_words::FINAL;
 use clap::Parser;
+use config::Config;
 use rand::Rng;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::io::BufReader;
 use std::path::PathBuf;
-use config::Config;
 
 //help print colorful chracters
 fn pr(c: char) {
@@ -30,7 +30,7 @@ fn pr(c: char) {
 }
 
 //commond-line argments parser
-#[derive(Parser,Clone)]
+#[derive(Parser, Clone)]
 #[command(version, about, long_about = None)]
 struct Cli {
     #[arg(short = 'w', long = "word")]
@@ -52,7 +52,7 @@ struct Cli {
     #[arg(short = 'S', long = "state")]
     state: Option<PathBuf>,
     #[arg(short = 'c', long = "config")]
-    config:Option<PathBuf>,
+    config: Option<PathBuf>,
 }
 
 //for reactive mood,output the guess result history
@@ -88,14 +88,14 @@ struct AppConfig {
 
 fn merge_config(cli: &Cli) -> Result<Cli, Box<dyn std::error::Error>> {
     let mut merged_cli = cli.clone();
-    
+
     if let Some(config_path) = &cli.config {
         let settings = Config::builder()
             .add_source(config::File::with_name(config_path.to_str().unwrap()))
             .build()?;
-            
+
         let app_config: AppConfig = settings.try_deserialize()?;
-        
+
         if merged_cli.words.is_none() {
             merged_cli.words = app_config.word;
         }
@@ -124,7 +124,7 @@ fn merge_config(cli: &Cli) -> Result<Cli, Box<dyn std::error::Error>> {
             merged_cli.state = app_config.state;
         }
     }
-    
+
     Ok(merged_cli)
 }
 
@@ -142,18 +142,16 @@ fn play_tty(
         guesses: Vec::new(),
     };
     let mut game_record: Vec<GameHistory> = Vec::new();
-    if let Some(_) = cli.words {
+    if cli.words.is_some() {
         if cli.days != 1 {
             return 10000;
         }
-        if let Some(__) = cli.seed {
+        if cli.seed.is_some() {
             return 10000;
         }
     }
-    if cli.rand_verbos {
-        if let Some(_) = cli.words {
-            return 10000;
-        }
+    if cli.rand_verbos && cli.words.is_some() {
+        return 10000;
     }
     println!(
         "I am in a tty. Please print {}!",
@@ -252,7 +250,9 @@ fn play_tty(
         }
 
         if input_flag {
-            *guess_list.entry(guess.trim().to_string().to_uppercase()).or_insert(0) += 1;
+            *guess_list
+                .entry(guess.trim().to_string().to_uppercase())
+                .or_insert(0) += 1;
             game.guesses.push(guess.trim().to_uppercase().to_string());
 
             for i in 0..5 {
@@ -262,15 +262,15 @@ fn play_tty(
                 } //give 'G'
             }
             for i in 0..5 {
-                if guess_word_vector[i] != answer_word_vector[i] {
-                    if let Some(&x) = guess_appearance.get(&guess_word_vector[i]) {
-                        if x > 0 {
-                            //don't overplus
-                            s_status[i] = 'Y';
-                            *guess_appearance.entry(guess_word_vector[i]).or_insert(0) -= 1;
-                        }
-                    }
+                if guess_word_vector[i] != answer_word_vector[i]
+                    && let Some(&x) = guess_appearance.get(&guess_word_vector[i])
+                    && x > 0
+                {
+                    //don't overplus
+                    s_status[i] = 'Y';
+                    *guess_appearance.entry(guess_word_vector[i]).or_insert(0) -= 1;
                 }
+
                 match s_status[i] {
                     //renew the character's status
                     'G' => {
@@ -307,7 +307,7 @@ fn play_tty(
                         flag = false;
                     }
                 }
-                print!("{}", ' ');
+                print!(" ");
                 for iter in history_iter.char_status_history.iter() {
                     pr(*iter);
                 }
@@ -333,7 +333,7 @@ fn play_tty(
         println!("Answer:{}", answer_word.to_uppercase());
         return 0;
     }
-    return turn;
+    turn
 }
 
 fn play_dis_tty(
@@ -350,18 +350,16 @@ fn play_dis_tty(
         guesses: Vec::new(),
     };
     let mut answer_word: String;
-    if let Some(_) = cli.words {
+    if cli.words.is_some() {
         if cli.days != 1 {
             return 10000;
         }
-        if let Some(__) = cli.seed {
+        if cli.seed.is_some() {
             return 10000;
         }
     }
-    if cli.rand_verbos {
-        if let Some(_) = cli.words {
-            return 10000;
-        }
+    if cli.rand_verbos && cli.words.is_some() {
+        return 10000;
     }
     if cli.rand_verbos {
         if cli.days == 1 {
@@ -404,7 +402,6 @@ fn play_dis_tty(
 
     while turn <= 6 {
         io::stdin().read_line(&mut guess).expect("cannot read");
-        
 
         let mut guess_word_vector: Vec<char> = guess.chars().collect();
         let mut guess_appearance = appearance.clone();
@@ -445,7 +442,9 @@ fn play_dis_tty(
         }
 
         if input_flag {
-            *guess_list.entry(guess.trim().to_uppercase().clone()).or_insert(0) += 1;
+            *guess_list
+                .entry(guess.trim().to_uppercase().clone())
+                .or_insert(0) += 1;
             game.guesses.push(guess.trim().to_uppercase().to_string());
 
             for i in 0..5 {
@@ -455,14 +454,14 @@ fn play_dis_tty(
                 }
             }
             for i in 0..5 {
-                if guess_word_vector[i] != answer_word_vector[i] {
-                    if let Some(&x) = guess_appearance.get(&guess_word_vector[i]) {
-                        if x > 0 {
-                            s_status[i] = 'Y';
-                            *guess_appearance.entry(guess_word_vector[i]).or_insert(0) -= 1;
-                        }
-                    }
+                if guess_word_vector[i] != answer_word_vector[i]
+                    && let Some(&x) = guess_appearance.get(&guess_word_vector[i])
+                    && x > 0
+                {
+                    s_status[i] = 'Y';
+                    *guess_appearance.entry(guess_word_vector[i]).or_insert(0) -= 1;
                 }
+
                 match s_status[i] {
                     'G' => {
                         green_list.push((guess_word_vector[i], i as i32));
@@ -491,7 +490,7 @@ fn play_dis_tty(
                     flag = false;
                 }
             }
-            print!("{}", ' ');
+            print!(" ");
             for iter in chracter_status.iter() {
                 pr(*iter);
             }
@@ -511,10 +510,10 @@ fn play_dis_tty(
     json_data.games.push(game);
     if flag {
         println!("CORRECT {}", turn);
-        return turn;
+        turn
     } else {
         println!("FAILED {}", answer_word.trim().to_uppercase());
-        return 0;
+        0
     }
 }
 
@@ -539,7 +538,7 @@ fn load_word_list(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::error::Err
     }
     let mut sorted_words = words;
     sorted_words.sort();
-    return Ok(sorted_words);
+    Ok(sorted_words)
 }
 
 fn load_accept_list(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -563,7 +562,7 @@ fn load_accept_list(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::error::E
     }
     let mut sorted_words = words;
     sorted_words.sort();
-    return Ok(sorted_words);
+    Ok(sorted_words)
 }
 
 fn load_state_json(path: &PathBuf) -> Result<JsonState, Box<dyn std::error::Error>> {
@@ -602,7 +601,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut final_list: Vec<String>;
     if let Some(ref x) = merged_cli.final_repo {
-        match load_word_list(&x) {
+        match load_word_list(x) {
             std::result::Result::Ok(x) => final_list = x,
             std::result::Result::Err(_x) => return Err(String::from("load error").into()),
         } // or use .unwrap() directly
@@ -618,7 +617,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let accept_list: Vec<String>;
     if let Some(ref x) = merged_cli.accept_repo {
-        accept_list = load_accept_list(&x).unwrap();
+        accept_list = load_accept_list(x).unwrap();
     } else {
         accept_list = ACCEPTABLE.iter().map(|&s| s.to_string()).collect();
     }
@@ -646,13 +645,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut success_record: i32 = 0;
                 let mut try_record: i32 = 0;
                 if let Some(__) = &merged_cli.state {
-                    for iter in json_data.games.iter(){
-                        if iter.guesses[iter.guesses.len()-1]==iter.answer {
-                            success_record+=1;
-                            try_record+=iter.guesses.len() as i32;
+                    for iter in json_data.games.iter() {
+                        if iter.guesses[iter.guesses.len() - 1] == iter.answer {
+                            success_record += 1;
+                            try_record += iter.guesses.len() as i32;
                         }
-                        for words_iter in 0..iter.guesses.len(){
-                            *guess_list.entry(iter.guesses[words_iter].trim().to_lowercase().to_string()).or_insert(0) += 1;
+                        for words_iter in 0..iter.guesses.len() {
+                            *guess_list
+                                .entry(iter.guesses[words_iter].trim().to_lowercase().to_string())
+                                .or_insert(0) += 1;
                         }
                     }
                 }
@@ -697,7 +698,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             io::stdout().flush().unwrap();
                             print!("{} {} ", iter.0.to_uppercase(), iter.1);
                         }
-                        println!("{}", ' ');
+                        println!(" ");
                     }
 
                     //io::stdout().flush().unwrap();
@@ -732,12 +733,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut success_record: i32 = 0;
                 let mut try_record: i32 = 0;
                 if let Some(__) = &merged_cli.state {
-                    for iter in json_data.games.iter(){
-                        if iter.guesses[iter.guesses.len()-1]==iter.answer {
-                            success_record+=1;
-                            try_record+=iter.guesses.len() as i32;
+                    for iter in json_data.games.iter() {
+                        if iter.guesses[iter.guesses.len() - 1] == iter.answer {
+                            success_record += 1;
+                            try_record += iter.guesses.len() as i32;
                         }
-                        for words_iter in 0..iter.guesses.len(){
+                        for words_iter in 0..iter.guesses.len() {
                             let key = iter.guesses[words_iter].trim().to_string();
                             *guess_list.entry(key).or_insert(0) += 1;
                         }
@@ -762,7 +763,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         success_record += 1;
                         try_record += success_flag;
                     }
-                    
+
                     if merged_cli.status_verbos {
                         //io::stdout().flush().unwrap();
                         if success_record > 0 {
@@ -787,7 +788,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         println!("{}", output);
                     }
-                    
+
                     if let Some(x) = &merged_cli.state {
                         write_state_json(x, &json_data)?;
                     }
@@ -799,12 +800,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         break;
                     }
                 }
-                match &merged_cli.state{
-                    Some(_x) => {
-                        Ok(())
-                    }
-                    _ => Ok(())
-                } 
+                match &merged_cli.state {
+                    Some(_x) => Ok(()),
+                    _ => Ok(()),
+                }
             }
         }
     }
