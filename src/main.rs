@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::io::BufReader;
 use std::path::PathBuf;
+use config::Config;
 
 //help print colorful chracters
 fn pr(c: char) {
@@ -29,7 +30,7 @@ fn pr(c: char) {
 }
 
 //commond-line argments parser
-#[derive(Parser)]
+#[derive(Parser,Clone)]
 #[command(version, about, long_about = None)]
 struct Cli {
     #[arg(short = 'w', long = "word")]
@@ -50,6 +51,8 @@ struct Cli {
     accept_repo: Option<PathBuf>,
     #[arg(short = 'S', long = "state")]
     state: Option<PathBuf>,
+    #[arg(short = 'c', long = "config")]
+    config:Option<PathBuf>,
 }
 
 //for reactive mood,output the guess result history
@@ -68,6 +71,61 @@ struct JsonState {
 struct Game {
     answer: String,
     guesses: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct AppConfig {
+    random: Option<bool>,
+    difficult: Option<bool>,
+    stats: Option<bool>,
+    day: Option<usize>,
+    seed: Option<u64>,
+    final_set: Option<PathBuf>,
+    acceptable_set: Option<PathBuf>,
+    state: Option<PathBuf>,
+    word: Option<String>,
+}
+
+fn merge_config(cli: &Cli) -> Result<Cli, Box<dyn std::error::Error>> {
+    let mut merged_cli = cli.clone();
+    
+    if let Some(config_path) = &cli.config {
+        let settings = Config::builder()
+            .add_source(config::File::with_name(config_path.to_str().unwrap()))
+            .build()?;
+            
+        let app_config: AppConfig = settings.try_deserialize()?;
+        
+        if merged_cli.words.is_none() {
+            merged_cli.words = app_config.word;
+        }
+        if !merged_cli.rand_verbos {
+            merged_cli.rand_verbos = app_config.random.unwrap_or(false);
+        }
+        if !merged_cli.diff_verbos {
+            merged_cli.diff_verbos = app_config.difficult.unwrap_or(false);
+        }
+        if !merged_cli.status_verbos {
+            merged_cli.status_verbos = app_config.stats.unwrap_or(false);
+        }
+        if merged_cli.days == 1 {
+            merged_cli.days = app_config.day.unwrap_or(1);
+        }
+        if merged_cli.seed.is_none() {
+            merged_cli.seed = app_config.seed;
+        }
+        if merged_cli.final_repo.is_none() {
+            merged_cli.final_repo = app_config.final_set;
+        }
+        if merged_cli.accept_repo.is_none() {
+            merged_cli.accept_repo = app_config.acceptable_set;
+        }
+        if merged_cli.state.is_none() {
+            merged_cli.state = app_config.state;
+        }
+    }
+    
+    Ok(merged_cli)
 }
 
 fn play_tty(
@@ -346,7 +404,7 @@ fn play_dis_tty(
 
     while turn <= 6 {
         io::stdin().read_line(&mut guess).expect("cannot read");
-        guess = guess.to_lowercase();
+        
 
         let mut guess_word_vector: Vec<char> = guess.chars().collect();
         let mut guess_appearance = appearance.clone();
@@ -387,7 +445,7 @@ fn play_dis_tty(
         }
 
         if input_flag {
-            *guess_list.entry(guess.trim().to_string()).or_insert(0) += 1;
+            *guess_list.entry(guess.trim().to_uppercase().clone()).or_insert(0) += 1;
             game.guesses.push(guess.trim().to_uppercase().to_string());
 
             for i in 0..5 {
@@ -527,12 +585,14 @@ fn write_state_json(
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let is_tty = atty::is(atty::Stream::Stdout);
     let cli = Cli::parse();
+    let merged_cli = merge_config(&cli)?;
+
     let mut json_data: JsonState = JsonState {
         total_rounds: 0,
         games: Vec::new(),
     };
-    if let Some(ref __) = cli.state {
-        match load_state_json(&cli.state.clone().unwrap()) {
+    if let Some(ref __) = merged_cli.state {
+        match load_state_json(&merged_cli.state.clone().unwrap()) {
             Result::Ok(x) => json_data = x,
             Err(_) => json_data.total_rounds = 0,
         }
@@ -541,7 +601,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut guess_list: BTreeMap<String, i32> = BTreeMap::new();
 
     let mut final_list: Vec<String>;
-    if let Some(ref x) = cli.final_repo {
+    if let Some(ref x) = merged_cli.final_repo {
         match load_word_list(&x) {
             std::result::Result::Ok(x) => final_list = x,
             std::result::Result::Err(_x) => return Err(String::from("load error").into()),
@@ -549,7 +609,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         final_list = FINAL.iter().map(|&s| s.to_string()).collect();
     }
-    let mut rng = if let Some(seed) = cli.seed {
+    let mut rng = if let Some(seed) = merged_cli.seed {
         StdRng::seed_from_u64(seed)
     } else {
         StdRng::seed_from_u64(42)
@@ -557,23 +617,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     final_list.shuffle(&mut rng);
 
     let accept_list: Vec<String>;
-    if let Some(ref x) = cli.accept_repo {
+    if let Some(ref x) = merged_cli.accept_repo {
         accept_list = load_accept_list(&x).unwrap();
     } else {
         accept_list = ACCEPTABLE.iter().map(|&s| s.to_string()).collect();
     }
 
     if is_tty {
-        match cli.words {
+        match merged_cli.words {
             Some(ref _x) => {
                 let success_flag = play_tty(
-                    &cli,
+                    &merged_cli,
                     &mut answer_list,
                     &mut guess_list,
                     &final_list,
                     &accept_list,
                     &mut json_data,
-                    cli.days - 1,
+                    merged_cli.days - 1,
                 );
                 if success_flag == 10000 {
                     return Err(String::from("mood mix!").into());
@@ -585,7 +645,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut turns_record: i32 = 0;
                 let mut success_record: i32 = 0;
                 let mut try_record: i32 = 0;
-                if let Some(__) = &cli.state {
+                if let Some(__) = &merged_cli.state {
                     for iter in json_data.games.iter(){
                         if iter.guesses[iter.guesses.len()-1]==iter.answer {
                             success_record+=1;
@@ -598,13 +658,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 loop {
                     let success_flag = play_tty(
-                        &cli,
+                        &merged_cli,
                         &mut answer_list,
                         &mut guess_list,
                         &final_list,
                         &accept_list,
                         &mut json_data,
-                        cli.days - 1 + turns_record as usize,
+                        merged_cli.days - 1 + turns_record as usize,
                     );
                     turns_record += 1;
                     json_data.total_rounds += 1;
@@ -615,10 +675,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         success_record += 1;
                         try_record += success_flag;
                     }
-                    if let Some(x) = &cli.state {
+                    if let Some(x) = &merged_cli.state {
                         write_state_json(x, &json_data)?;
                     }
-                    if cli.status_verbos {
+                    if merged_cli.status_verbos {
                         //io::stdout().flush().unwrap();
                         if success_record > 0 {
                             println!(
@@ -651,16 +711,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     } else {
-        match cli.words {
+        match merged_cli.words {
             Some(ref _x) => {
                 let success_flag = play_dis_tty(
-                    &cli,
+                    &merged_cli,
                     &mut answer_list,
                     &mut guess_list,
                     &final_list,
                     &accept_list,
                     &mut json_data,
-                    cli.days - 1,
+                    merged_cli.days - 1,
                 );
                 if success_flag == 10000 {
                     return Err(String::from("mood mix!").into());
@@ -671,28 +731,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut turns_record: i32 = 0;
                 let mut success_record: i32 = 0;
                 let mut try_record: i32 = 0;
-                if let Some(__) = &cli.state {
+                if let Some(__) = &merged_cli.state {
                     for iter in json_data.games.iter(){
                         if iter.guesses[iter.guesses.len()-1]==iter.answer {
                             success_record+=1;
                             try_record+=iter.guesses.len() as i32;
                         }
                         for words_iter in 0..iter.guesses.len(){
-                            let key = iter.guesses[words_iter].trim().to_string().to_lowercase();
+                            let key = iter.guesses[words_iter].trim().to_string();
                             *guess_list.entry(key).or_insert(0) += 1;
                         }
                     }
-                    println!("abc");
                 }
                 loop {
                     let success_flag = play_dis_tty(
-                        &cli,
+                        &merged_cli,
                         &mut answer_list,
                         &mut guess_list,
                         &final_list,
                         &accept_list,
                         &mut json_data,
-                        (cli.days - 1) + turns_record as usize,
+                        (merged_cli.days - 1) + turns_record as usize,
                     );
                     turns_record += 1;
                     json_data.total_rounds += 1;
@@ -703,10 +762,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         success_record += 1;
                         try_record += success_flag;
                     }
-                    if let Some(x) = &cli.state {
-                        write_state_json(x, &json_data)?;
-                    }
-                    if cli.status_verbos {
+                    
+                    if merged_cli.status_verbos {
                         //io::stdout().flush().unwrap();
                         if success_record > 0 {
                             println!(
@@ -730,14 +787,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         println!("{}", output);
                     }
+                    
+                    if let Some(x) = &merged_cli.state {
+                        write_state_json(x, &json_data)?;
+                    }
 
                     io::stdout().flush().unwrap();
                     let mut cont = String::new();
                     std::io::stdin().read_line(&mut cont).expect("cannot read");
                     if cont.trim() != "Y" {
-                        break Ok(());
+                        break;
                     }
                 }
+                match &merged_cli.state{
+                    Some(_x) => {
+                        Ok(())
+                    }
+                    _ => Ok(())
+                } 
             }
         }
     }

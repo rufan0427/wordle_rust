@@ -1,5 +1,5 @@
 {
-  "total_rounds": 6,
+  "total_rounds": 8,
   "games": [
     {
       "answer": "POSER",
@@ -60,6 +60,26 @@
         "RAINS",
         "SPIRT",
         "SPURN"
+      ]
+    },
+    {
+      "answer": "SPIED",
+      "guesses": [
+        "CRANE",
+        "TELES",
+        "SHIED",
+        "SPIED"
+      ]
+    },
+    {
+      "answer": "GEESE",
+      "guesses": [
+        "SLATE",
+        "AUDIO",
+        "PARSE",
+        "CHESS",
+        "GREEN",
+        "BLEED"
       ]
     }
   ]
