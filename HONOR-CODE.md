@@ -36,10 +36,23 @@
 
 关于大小写转换,我向 deepseek 提问了upper,lower transform，deepseek回答启发了我在guess = guess.to_lowercase();中的实现。
 
+clap:
+https://docs.rs/clap/latest/clap/_derive/_tutorial/index.html
+https://rust-cli.github.io/book/index.html
+
+serde_json:
+https://docs.rs/serde_json/latest/serde_json/
+https://dev.to/pintuch/rust-serde-json-by-example-2kkf
+我向 deepseek 提问了why output "{\"total_rounds\":1,\"games\":[{\"answer\":\"wince\",\"guesses\":[\"abort\",\"cargo\",\"abort\",\"abort\",\"abort\",\"abort\"]}]}"?,deepseek 回答
+
+    原因分析
+    1. JSON 字符串的转义
+    双引号 " 在 JSON 字符串中需要被转义为 \"
+
+启发了我导入了 Deserialize trait，但没有启用 serde 的 derive 功能。需要在 Cargo.toml 中正确配置 serde 依赖,直接写入。
+
 egui&eframe:
-
 https://www.cnblogs.com/absalom/articles/17943481
-
 https://blog.csdn.net/qq_30712797/article/details/150720947
 
 

@@ -1,6 +1,6 @@
 use eframe::egui;
-use std::collections::HashMap;
 use rand::SeedableRng;
+use std::collections::HashMap;
 
 mod builtin_words;
 use builtin_words::{ACCEPTABLE, FINAL};
@@ -17,6 +17,8 @@ struct WordleApp {
     accept_list: Vec<String>,
     final_list: Vec<String>,
     config: GuiConfig,
+    green_list: Vec<(char, usize)>,
+    yellow_list: Vec<char>,
 }
 
 #[derive(Default)]
@@ -35,7 +37,7 @@ impl WordleApp {
 
     fn new_game(&mut self) {
         use rand::Rng;
-        
+
         let mut rng = if let Some(seed) = self.config.seed {
             rand::rngs::StdRng::seed_from_u64(seed)
         } else {
@@ -44,13 +46,15 @@ impl WordleApp {
 
         let index = rng.gen_range(0..self.final_list.len());
         self.answer = self.final_list[index].clone().to_uppercase();
-        
+
         self.guesses.clear();
         self.feedback.clear();
         self.current_guess.clear();
         self.game_over = false;
         self.message.clear();
         self.keyboard_state.clear();
+        self.green_list.clear();
+        self.yellow_list.clear();
     }
 
     fn submit_guess(&mut self) {
@@ -65,12 +69,18 @@ impl WordleApp {
             return;
         }
 
-        let feedback = self.calculate_feedback(&self.current_guess);
+        if self.config.difficult && !self.examine(&self.current_guess) {
+            self.message = "Difficult Mode: against the rule".to_string();
+            return;
+        }
+
+        let current_guess_clone = self.current_guess.clone();
+        let feedback = self.calculate_feedback(&current_guess_clone);
         let current_guess_clone = self.current_guess.clone();
         self.guesses.push(current_guess_clone.clone());
         self.feedback.push(feedback.clone());
         self.update_keyboard_state(&current_guess_clone, &feedback);
-        
+
         self.current_guess.clear();
 
         if feedback.iter().all(|&c| c == 'G') {
@@ -82,21 +92,38 @@ impl WordleApp {
         }
     }
 
-    fn calculate_feedback(&self, guess: &str) -> Vec<char> {
+    fn examine(&self, guess: &str) -> bool {
+        let guess_word_vector: Vec<char> = guess.chars().collect();
+        for iter in self.green_list.iter() {
+            if guess_word_vector[iter.1] != iter.0 {
+                return false;
+            }
+        }
+        for iter in self.yellow_list.iter() {
+            if !guess.contains(*iter) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    fn calculate_feedback(&mut self, guess: &str) -> Vec<char> {
         let mut feedback = vec!['R'; 5];
         let mut answer_chars: Vec<char> = self.answer.chars().collect();
         let guess_chars: Vec<char> = guess.chars().collect();
         for i in 0..5 {
             if guess_chars[i] == answer_chars[i] {
                 feedback[i] = 'G';
-                answer_chars[i] = ' '; 
+                self.green_list.push((guess_chars[i], i));
+                answer_chars[i] = ' ';
             }
         }
         for i in 0..5 {
             if feedback[i] == 'R' {
                 if let Some(pos) = answer_chars.iter().position(|&c| c == guess_chars[i]) {
                     feedback[i] = 'Y';
-                    answer_chars[pos] = ' '; 
+                    self.yellow_list.push(guess_chars[i]);
+                    answer_chars[pos] = ' ';
                 }
             }
         }
@@ -107,7 +134,7 @@ impl WordleApp {
     fn update_keyboard_state(&mut self, guess: &str, feedback: &[char]) {
         for (i, c) in guess.chars().enumerate() {
             let current_state = self.keyboard_state.entry(c).or_insert('X');
-            
+
             match feedback[i] {
                 'G' => *current_state = 'G',
                 'Y' if *current_state != 'G' => *current_state = 'Y',
@@ -119,90 +146,83 @@ impl WordleApp {
 
     fn get_key_color(&self, key: char) -> egui::Color32 {
         match self.keyboard_state.get(&key).unwrap_or(&'X') {
-            'G' => egui::Color32::from_rgb(106, 170, 100), 
-            'Y' => egui::Color32::from_rgb(201, 180, 88),  
-            'R' => egui::Color32::from_rgb(120, 124, 126), 
-            _ => egui::Color32::from_rgb(211, 214, 218),   
+            'G' => egui::Color32::from_rgb(106, 170, 100),
+            'Y' => egui::Color32::from_rgb(201, 180, 88),
+            'R' => egui::Color32::from_rgb(120, 124, 126),
+            _ => egui::Color32::from_rgb(211, 214, 218),
         }
     }
 
     fn render_game_grid(&self, ui: &mut egui::Ui) {
-    ui.vertical_centered(|ui| {
-        egui::Grid::new("game_grid")
-            .spacing([8.0, 50.0])
-            .show(ui, |ui| {
-                for row in 0..6 {
-                    for col in 0..5 {
-                        
-                        ui.add_space(100.0);
-                        let cell_size = egui::vec2(80.0, 50.0);
-                        
-                        if row < self.guesses.len() {
-                            let letter = self.guesses[row].chars().nth(col).unwrap();
-                            let feedback_char = self.feedback[row][col];
-                            
-                            let color = match feedback_char {
-                                'G' => egui::Color32::from_rgb(106, 170, 100),
-                                'Y' => egui::Color32::from_rgb(201, 180, 88),
-                                _ => egui::Color32::from_rgb(120, 124, 126),
-                            };
-                            
-                            let rect = egui::Rect::from_min_size(ui.cursor().min, cell_size);
-                            ui.painter().rect_filled(rect, 4.0, color);
+        ui.vertical_centered(|ui| {
+            egui::Grid::new("game_grid")
+                .spacing([8.0, 50.0])
+                .show(ui, |ui| {
+                    for row in 0..6 {
+                        for col in 0..5 {
+                            ui.add_space(100.0);
+                            let cell_size = egui::vec2(80.0, 50.0);
 
-                            ui.add_space(25.0);
+                            if row < self.guesses.len() {
+                                let letter = self.guesses[row].chars().nth(col).unwrap();
+                                let feedback_char = self.feedback[row][col];
 
-                            ui.label(
-                                egui::RichText::new(letter.to_string())
-                                    .color(egui::Color32::WHITE)
-                                    .size(40.0)
-                                    .strong()
-                            );
-                        } else if row == self.guesses.len() && col < self.current_guess.len() {
-                            let letter = self.current_guess.chars().nth(col).unwrap();
-                            
-                            let rect = egui::Rect::from_min_size(ui.cursor().min, cell_size);
-                            ui.painter().rect_stroke(
-                                rect,
-                                4.0,
-                                egui::Stroke::new(2.0, egui::Color32::GRAY),
-                            );
+                                let color = match feedback_char {
+                                    'G' => egui::Color32::from_rgb(106, 170, 100),
+                                    'Y' => egui::Color32::from_rgb(201, 180, 88),
+                                    _ => egui::Color32::from_rgb(120, 124, 126),
+                                };
 
-                            ui.add_space(25.0);
+                                let rect = egui::Rect::from_min_size(ui.cursor().min, cell_size);
+                                ui.painter().rect_filled(rect, 4.0, color);
 
-                            ui.label(
-                                egui::RichText::new(letter.to_string())
-                                    .size(40.0)
-                                    .strong()
-                            );
-                        } else {
-                            let rect = egui::Rect::from_min_size(ui.cursor().min, cell_size);
-                            ui.painter().rect_stroke(
-                                rect,
-                                4.0,
-                                egui::Stroke::new(2.0, egui::Color32::GRAY),
-                            );
-                            
-                            ui.label(" ");
+                                ui.add_space(25.0);
+
+                                ui.label(
+                                    egui::RichText::new(letter.to_string())
+                                        .color(egui::Color32::WHITE)
+                                        .size(40.0)
+                                        .strong(),
+                                );
+                            } else if row == self.guesses.len() && col < self.current_guess.len() {
+                                let letter = self.current_guess.chars().nth(col).unwrap();
+
+                                let rect = egui::Rect::from_min_size(ui.cursor().min, cell_size);
+                                ui.painter().rect_stroke(
+                                    rect,
+                                    4.0,
+                                    egui::Stroke::new(2.0, egui::Color32::GRAY),
+                                );
+
+                                ui.add_space(25.0);
+
+                                ui.label(
+                                    egui::RichText::new(letter.to_string()).size(40.0).strong(),
+                                );
+                            } else {
+                                let rect = egui::Rect::from_min_size(ui.cursor().min, cell_size);
+                                ui.painter().rect_stroke(
+                                    rect,
+                                    4.0,
+                                    egui::Stroke::new(2.0, egui::Color32::GRAY),
+                                );
+
+                                ui.label(" ");
+                            }
                         }
+                        ui.end_row();
                     }
-                    ui.end_row();
-                }
-            });
+                });
         });
     }
 
     fn render_keyboard(&mut self, ui: &mut egui::Ui) {
-        let keyboard_rows = [
-            "QWERTYUIOP",
-            "ASDFGHJKL",
-            "ZXCVBNM"
-        ];
+        let keyboard_rows = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
 
         for row in keyboard_rows.iter() {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(10.0, 4.0);
-                let total_width = row.len() as f32 * 46.0 -4.0; 
+                let total_width = row.len() as f32 * 46.0 - 4.0;
                 let available_width = ui.available_width();
                 let padding = (available_width - total_width) / 2.0;
                 ui.add_space(padding);
@@ -210,55 +230,58 @@ impl WordleApp {
                     let button = egui::Button::new(
                         egui::RichText::new(key.to_string())
                             .size(16.0)
-                            .color(egui::Color32::WHITE)
+                            .color(egui::Color32::WHITE),
                     )
                     .fill(self.get_key_color(key))
                     .min_size(egui::vec2(36.0, 46.0));
-                    
+
                     if ui.add(button).clicked() && !self.game_over && self.current_guess.len() < 5 {
                         self.current_guess.push(key);
                     }
                 }
                 ui.add_space(padding);
             });
-            
+
             ui.add_space(6.0);
         }
 
         ui.horizontal(|ui| {
-            let total_width = 520.0; 
+            let total_width = 640.0;
             let available_width = ui.available_width();
             let padding = (available_width - total_width) / 2.0;
             ui.add_space(padding);
-            let enter_button = ui.add(
-                egui::Button::new("ENTER")
-                    .min_size(egui::vec2(100.0, 46.0))
-            );
-            
+            let enter_button = ui.add(egui::Button::new("ENTER").min_size(egui::vec2(100.0, 46.0)));
+
             if enter_button.clicked() && !self.game_over && self.current_guess.len() == 5 {
                 self.submit_guess();
             }
-            
-            ui.add_space(100.0);
 
-            let backspace_button = ui.add(
-                egui::Button::new("BACKSPACE")
-                    .min_size(egui::vec2(100.0, 46.0))
-            );
-            
+            ui.add_space(70.0);
+
+            let backspace_button =
+                ui.add(egui::Button::new("BACKSPACE").min_size(egui::vec2(100.0, 46.0)));
+
             if backspace_button.clicked() && !self.game_over && !self.current_guess.is_empty() {
                 self.current_guess.pop();
             }
 
-            ui.add_space(100.0);
+            ui.add_space(70.0);
 
-            let new_game_button = ui.add(
-                egui::Button::new("NEW GAME")
-                    .min_size(egui::vec2(100.0, 46.0))
-            );
-            
+            let new_game_button =
+                ui.add(egui::Button::new("NEW GAME").min_size(egui::vec2(100.0, 46.0)));
+
             if new_game_button.clicked() {
                 self.new_game();
+            }
+
+            ui.add_space(70.0);
+
+            let mode_button =
+                ui.add(egui::Button::new("DIFFICULT MODE").min_size(egui::vec2(100.0, 46.0)));
+
+            if mode_button.clicked() {
+                self.config.difficult = !self.config.difficult;
+                println!("click!{}", self.config.difficult);
             }
         });
     }
@@ -271,7 +294,7 @@ impl eframe::App for WordleApp {
                 ui.heading(
                     egui::RichText::new("WORDLE")
                         .size(36.0)
-                        .color(egui::Color32::from_rgb(106, 170, 100))
+                        .color(egui::Color32::from_rgb(106, 170, 100)),
                 );
             });
 
@@ -294,12 +317,12 @@ impl eframe::App for WordleApp {
                             }
                         }
                     }
-                    
+
                     if i.key_pressed(egui::Key::Backspace) && !self.current_guess.is_empty() {
                         self.current_guess.pop();
                         self.message.clear();
                     }
-                    
+
                     if i.key_pressed(egui::Key::Enter) && self.current_guess.len() == 5 {
                         self.submit_guess();
                     }
@@ -313,11 +336,10 @@ impl eframe::App for WordleApp {
                     ui.label(
                         egui::RichText::new(&self.message)
                             .size(24.0)
-                            .color(egui::Color32::RED)
+                            .color(egui::Color32::RED),
                     );
                 });
             }
-
         });
 
         ctx.request_repaint();
@@ -325,14 +347,14 @@ impl eframe::App for WordleApp {
 }
 
 fn main() -> eframe::Result<()> {
-    let mut options = eframe::NativeOptions{
+    let mut options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1000.0, 1200.0])  
+            .with_inner_size([1000.0, 1200.0])
             .with_min_inner_size([500.0, 700.0])
             .with_resizable(false),
         ..Default::default()
     };
-    options.centered=true;
+    options.centered = true;
     eframe::run_native(
         "Wordle Game",
         options,

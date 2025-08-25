@@ -132,8 +132,8 @@ fn play_tty(
     cli: &Cli,
     answer_list: &mut Vec<String>,
     guess_list: &mut BTreeMap<String, i32>,
-    final_list: &Vec<String>,
-    accept_list: &Vec<String>,
+    final_list: &[String],
+    accept_list: &[String],
     json_data: &mut JsonState,
     id: usize,
 ) -> i32 {
@@ -340,8 +340,8 @@ fn play_dis_tty(
     cli: &Cli,
     answer_list: &mut Vec<String>,
     guess_list: &mut BTreeMap<String, i32>,
-    final_list: &Vec<String>,
-    accept_list: &Vec<String>,
+    final_list: &[String],
+    accept_list: &[String],
     json_data: &mut JsonState,
     id: usize,
 ) -> i32 {
