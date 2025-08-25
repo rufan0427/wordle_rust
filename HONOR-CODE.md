@@ -36,4 +36,10 @@
 
 关于大小写转换,我向 deepseek 提问了upper,lower transform，deepseek回答启发了我在guess = guess.to_lowercase();中的实现。
 
+egui&eframe:
+
+https://www.cnblogs.com/absalom/articles/17943481
+
+https://blog.csdn.net/qq_30712797/article/details/150720947
+
 
