@@ -315,7 +315,7 @@ fn play_tty(
                 for iter in history_iter.char_status_history.iter() {
                     pr(*iter);
                 }
-                println!("");
+                println!();
             }
 
             if cli.tips {
@@ -527,7 +527,7 @@ fn play_dis_tty(
             for iter in chracter_status.iter() {
                 pr(*iter);
             }
-            println!("");
+            println!();
         }
         if flag {
             break;
