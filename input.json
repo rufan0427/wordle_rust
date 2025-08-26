@@ -1,86 +1,15 @@
 {
-  "total_rounds": 8,
+  "This is an invalid JSON",
+  "total_rounds": 1,
   "games": [
-    {
-      "answer": "POSER",
-      "guesses": [
-        "HELLO",
-        "CRANE",
-        "POWER",
-        "POKER",
-        "POSER"
-      ]
-    },
-    {
-      "answer": "HIPPY",
-      "guesses": [
-        "CRANE",
-        "PLOTS",
-        "HELLO",
-        "HAPPY",
-        "HIPPY"
-      ]
-    },
-    {
-      "answer": "WRUNG",
-      "guesses": [
-        "DREAM",
-        "TERAS",
-        "BRING",
-        "WRONG",
-        "WRUNG"
-      ]
-    },
-    {
-      "answer": "SMOCK",
-      "guesses": [
-        "CRANE",
-        "TICKS",
-        "AUDIO",
-        "SHOCK",
-        "SMOCK"
-      ]
-    },
-    {
-      "answer": "SNEAK",
-      "guesses": [
-        "WORLD",
-        "NIGHT",
-        "AUDIO",
-        "MEANS",
-        "SNEAK"
-      ]
-    },
-    {
-      "answer": "SPURN",
-      "guesses": [
-        "CRANE",
-        "HELLO",
-        "CARGO",
-        "RAINS",
-        "SPIRT",
-        "SPURN"
-      ]
-    },
-    {
-      "answer": "SPIED",
-      "guesses": [
-        "CRANE",
-        "TELES",
-        "SHIED",
-        "SPIED"
-      ]
-    },
-    {
-      "answer": "GEESE",
-      "guesses": [
-        "SLATE",
-        "AUDIO",
-        "PARSE",
-        "CHESS",
-        "GREEN",
-        "BLEED"
-      ]
-    }
-  ]
+  {
+    "answer": "POSER",
+    "guesses": [
+      "HELLO",
+      "CRANE",
+      "POWER",
+      "POKER",
+      "POSER"
+    ]
+  }
 }

@@ -53,6 +53,8 @@ struct Cli {
     state: Option<PathBuf>,
     #[arg(short = 'c', long = "config")]
     config: Option<PathBuf>,
+    #[arg(short = 'p', long = "tips")]
+    tips: bool,
 }
 
 //for reactive mood,output the guess result history
@@ -61,13 +63,15 @@ struct GameHistory {
     char_status_history: Vec<char>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct JsonState {
+    #[serde(default)]
     total_rounds: i32,
+    #[serde(default)]
     games: Vec<Game>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Game {
     answer: String,
     guesses: Vec<String>,
@@ -205,6 +209,7 @@ fn play_tty(
     let mut flag: bool = false;
     let mut green_list: Vec<(char, i32)> = Vec::new();
     let mut yellow_list: Vec<char> = Vec::new();
+    let mut red_list: Vec<char> = Vec::new();
 
     while turn <= 6 {
         println!("You have {} chance left,Input you guess:", 7 - turn);
@@ -235,11 +240,9 @@ fn play_tty(
                 }
             }
         } else {
-            for i in 0..5 {
+            for i in guess_word_vector.iter().take(5) {
                 //chracter
-                if !((guess_word_vector[i] >= 'A' && guess_word_vector[i] <= 'Z')
-                    || (guess_word_vector[i] >= 'a' && guess_word_vector[i] <= 'z'))
-                {
+                if !((*i >= 'A' && *i <= 'Z') || (*i >= 'a' && *i <= 'z')) {
                     input_flag = false;
                     break;
                 }
@@ -288,6 +291,7 @@ fn play_tty(
                         && chracter_status[((guess_word_vector[i] as u8) - b'a') as usize]
                             != 'Y') =>
                     {
+                        red_list.push(guess_word_vector[i]);
                         chracter_status[((guess_word_vector[i] as u8) - b'a') as usize] = 'R';
                     }
                     _ => continue,
@@ -312,6 +316,37 @@ fn play_tty(
                     pr(*iter);
                 }
                 println!("");
+            }
+
+            if cli.tips {
+                let mut pos_flag: bool;
+                let mut pos_word_list: Vec<&str> = Vec::new();
+                for &possible_word in ACCEPTABLE {
+                    pos_flag = true;
+                    let pos_word_vec: Vec<char> = possible_word.chars().collect();
+                    for iter in green_list.iter() {
+                        if pos_word_vec[iter.1 as usize] != iter.0 {
+                            pos_flag = false;
+                            break;
+                        }
+                    }
+                    for iter in yellow_list.iter() {
+                        if !possible_word.contains(*iter) || !pos_flag {
+                            pos_flag = false;
+                            break;
+                        }
+                    }
+                    for iter in red_list.iter() {
+                        if possible_word.contains(*iter) || !pos_flag {
+                            pos_flag = false;
+                            break;
+                        }
+                    }
+                    if pos_flag {
+                        pos_word_list.push(possible_word);
+                    }
+                }
+                println!("{:?}", pos_word_list);
             }
         }
         if input_flag {
@@ -427,11 +462,9 @@ fn play_dis_tty(
                 }
             }
         } else {
-            for i in 0..5 {
+            for i in guess_word_vector.iter().take(5) {
                 //chracter
-                if !((guess_word_vector[i] >= 'A' && guess_word_vector[i] <= 'Z')
-                    || (guess_word_vector[i] >= 'a' && guess_word_vector[i] <= 'z'))
-                {
+                if !((*i >= 'A' && *i <= 'Z') || (*i >= 'a' && *i <= 'z')) {
                     input_flag = false;
                     break;
                 }
@@ -590,10 +623,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         total_rounds: 0,
         games: Vec::new(),
     };
+
     if let Some(ref __) = merged_cli.state {
         match load_state_json(&merged_cli.state.clone().unwrap()) {
             Result::Ok(x) => json_data = x,
-            Err(_) => json_data.total_rounds = 0,
+            Err(st) => {
+                json_data.total_rounds = 0;
+                return Err(st);
+            }
         }
     }
     let mut answer_list: Vec<String> = Vec::new();
