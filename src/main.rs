@@ -91,6 +91,8 @@ struct AppConfig {
 }
 
 fn merge_config(cli: &Cli) -> Result<Cli, Box<dyn std::error::Error>> {
+    // merge config.json and commond line arguments
+
     let mut merged_cli = cli.clone();
 
     if let Some(config_path) = &cli.config {
@@ -318,7 +320,7 @@ fn play_tty(
                 println!();
             }
 
-            if cli.tips {
+            if cli.tips && turn != 6 {
                 let mut pos_flag: bool;
                 let mut pos_word_list: Vec<&str> = Vec::new();
                 for &possible_word in ACCEPTABLE {
@@ -346,6 +348,7 @@ fn play_tty(
                         pos_word_list.push(possible_word);
                     }
                 }
+                calculate_entropy(&mut pos_word_list);
                 println!("{:?}", pos_word_list);
             }
         }
@@ -369,6 +372,49 @@ fn play_tty(
         return 0;
     }
     turn
+}
+
+use ordered_float::OrderedFloat;
+use priority_queue::PriorityQueue;
+
+fn calculate_entropy(pos_word_list: &mut Vec<&str>) {
+    let len = pos_word_list.len();
+    let mut recommond_list = PriorityQueue::new();
+    for i in pos_word_list.iter() {
+        let mut entropy = 0.0;
+        let mut possible_analyse: [i32; 300] = [0; 300];
+        for j in pos_word_list.iter() {
+            let mut pos_num = 0;
+            for pos in 0..5 {
+                if i.chars().nth(pos) == j.chars().nth(pos) {
+                    pos_num *= 3;
+                    continue;
+                }
+                if let Some(target_char) = j.chars().nth(pos)
+                    && i.find(target_char).is_some()
+                {
+                    pos_num = pos_num * 3 + 1;
+                    continue;
+                }
+                pos_num = pos_num * 3 + 2;
+            }
+            possible_analyse[pos_num] += 1;
+        }
+        for k in possible_analyse.iter_mut().take(244) {
+            if *k > 0 {
+                let p = *k as f64 / len as f64;
+                entropy += -p * f64::log2(p);
+            }
+            *k = 0;
+        }
+        recommond_list.push(*i, OrderedFloat(entropy));
+    }
+    println!("Top 5 words by entropy:");
+    for _ in 0..5 {
+        if let Some((word, entropy)) = recommond_list.pop() {
+            println!("{}: {:.4}", word, entropy.0);
+        }
+    }
 }
 
 fn play_dis_tty(
