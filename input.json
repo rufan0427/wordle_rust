@@ -1,15 +1,38 @@
 {
-  "This is an invalid JSON",
-  "total_rounds": 1,
+  "total_rounds": 3,
   "games": [
-  {
-    "answer": "POSER",
-    "guesses": [
-      "HELLO",
-      "CRANE",
-      "POWER",
-      "POKER",
-      "POSER"
-    ]
-  }
+    {
+      "answer": "WEARY",
+      "guesses": [
+        "APPLE",
+        "CRANE",
+        "REACT",
+        "CARGO",
+        "APPLE",
+        "AMPLY"
+      ]
+    },
+    {
+      "answer": "BANJO",
+      "guesses": [
+        "APPLE",
+        "EVERT",
+        "CARGO",
+        "BARRY",
+        "BREAD",
+        "HAPPY"
+      ]
+    },
+    {
+      "answer": "VIGIL",
+      "guesses": [
+        "APPLE",
+        "APPLE",
+        "APPLE",
+        "APPLE",
+        "CARGO",
+        "CRANE"
+      ]
+    }
+  ]
 }

@@ -1,6 +1,10 @@
 use eframe::egui;
 use rand::SeedableRng;
 use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::fs::File;
+use std::io::BufReader;
 
 mod builtin_words;
 use builtin_words::{ACCEPTABLE, FINAL};
@@ -19,6 +23,8 @@ struct WordleApp {
     config: GuiConfig,
     green_list: Vec<(char, usize)>,
     yellow_list: Vec<char>,
+    game_history:JsonState,
+    win_num:i32,
 }
 
 #[derive(Default)]
@@ -27,12 +33,59 @@ struct GuiConfig {
     seed: Option<u64>,
 }
 
+#[derive(Debug, Serialize, Deserialize,Default)]
+struct JsonState {
+    #[serde(default)] //default: allow {} empty json file
+    total_rounds: i32,
+    #[serde(default)]
+    games: Vec<Game>,
+}
+
+#[derive(Debug, Serialize, Deserialize,Default)]
+struct Game {
+    answer: String,
+    guesses: Vec<String>,
+}
+
 impl WordleApp {
     fn init(&mut self) {
         self.final_list = FINAL.iter().map(|s| s.to_string()).collect();
         self.accept_list = ACCEPTABLE.iter().map(|s| s.to_string()).collect();
         self.config.difficult = false;
+        match self.load_state_json(&PathBuf::from("input.json")){
+            Result::Ok(x)=>{
+                self.game_history = x;
+                for iter in self.game_history.games.iter() {
+                        if iter.guesses[iter.guesses.len() - 1] == iter.answer {
+                            self.win_num += 1;
+                        }
+                    }
+            }
+            Err(_) => {
+                self.game_history=JsonState{total_rounds:0,games:Vec::new()};
+                self.win_num = 0;
+            }
+
+        }
         self.new_game();
+    }
+
+    fn load_state_json(&mut self,path: &PathBuf) -> Result<JsonState, Box<dyn std::error::Error>> {
+        //load state json and return Result
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        let u = serde_json::from_reader(reader)?;
+        Ok(u)
+    }
+
+    fn write_state_json(
+        &self,
+        path: &PathBuf,
+        json_data: &JsonState,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let file = File::create(path)?;
+        serde_json::to_writer_pretty(file, &json_data)?;
+        Ok(())
     }
 
     fn new_game(&mut self) {
@@ -46,6 +99,7 @@ impl WordleApp {
 
         let index = rng.gen_range(0..self.final_list.len());
         self.answer = self.final_list[index].clone().to_uppercase();
+        self.game_history.games.push(Game { answer: self.answer.clone(), guesses: Vec::new() });
 
         self.guesses.clear();
         self.feedback.clear();
@@ -82,13 +136,21 @@ impl WordleApp {
         self.update_keyboard_state(&current_guess_clone, &feedback);
 
         self.current_guess.clear();
-
+        if let Some(current_game) = self.game_history.games.iter_mut().nth((self.game_history.total_rounds) as usize) {
+            current_game.guesses.push(current_guess_clone.clone());
+        }
         if feedback.iter().all(|&c| c == 'G') {
             self.game_over = true;
-            self.message = format!("You won in {} tries!", self.guesses.len());
+            self.game_history.total_rounds+=1;
+            self.win_num+=1;
+            self.message = format!("You won in {} tries! Total success :{}", self.guesses.len(),self.win_num);
+            
+            let _ =self.write_state_json(&PathBuf::from("input.json"),&self.game_history);
         } else if self.guesses.len() >= 6 {
             self.game_over = true;
-            self.message = format!("Game over! The word was {}", self.answer);
+            self.game_history.total_rounds+=1;
+            self.message = format!("Game over! The word was {},Total success :{}", self.answer,self.win_num);
+            let _ =self.write_state_json(&PathBuf::from("input.json"),&self.game_history);
         }
     }
 
