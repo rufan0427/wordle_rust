@@ -55,4 +55,30 @@ egui&eframe:
 https://www.cnblogs.com/absalom/articles/17943481
 https://blog.csdn.net/qq_30712797/article/details/150720947
 
+关于priority_queue,我向 deepseek 提问了entropy is f64 , need to override,entropy is f64 , need to override，deepseek回答
+
+    首先添加依赖：
+    toml
+    [dependencies]
+    priority-queue = "1.3.0"
+    ordered-float = "3.0"
+    // 使用 Reverse(OrderedFloat) 包装，实现按熵降序（最大堆）
+    recommond_list.push(word, Reverse(OrderedFloat(entropy)));
+启发了我启用priority_queue & orderedfloat crate 。
+
+关于&str,我向 deepseek 提问了visit each char in a &str, can i?，deepseek回答
+
+    1. 使用 chars() 方法（推荐）
+        let s = "hello世界";
+        // 方法 1: for 循环
+        for c in s.chars() {
+            println!("{}", c);
+        }
+        // 方法 2: 使用迭代器方法
+        s.chars().for_each(|c| println!("{}", c));
+
+启发了我在calculate_entropy中的实现。
+
+关于egui project,我向 deepseek 提问了how to organize equi in the same cargo ,use \[[bin]],now when I want to run src/main.rs I need to run "cargo run --bin wordle --features default " how can i do to let me only need to run "cargo run"? and provide myCargo.toml，deepseek回答
+启发了我在Cargo.toml中的实现。
 

@@ -53,7 +53,7 @@ struct Cli {
     state: Option<PathBuf>,
     #[arg(short = 'c', long = "config")]
     config: Option<PathBuf>,
-    #[arg(short = 'p', long = "tips")]
+    #[arg(short = 'p', long = "tips")] // -p to give recommand list
     tips: bool,
 }
 
@@ -65,7 +65,7 @@ struct GameHistory {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct JsonState {
-    #[serde(default)]
+    #[serde(default)] //default: allow {} empty json file
     total_rounds: i32,
     #[serde(default)]
     games: Vec<Game>,
@@ -77,6 +77,7 @@ struct Game {
     guesses: Vec<String>,
 }
 
+//parse config file
 #[derive(Debug, Deserialize, Default)]
 struct AppConfig {
     random: Option<bool>,
@@ -135,19 +136,21 @@ fn merge_config(cli: &Cli) -> Result<Cli, Box<dyn std::error::Error>> {
 }
 
 fn play_tty(
-    cli: &Cli,
-    answer_list: &mut Vec<String>,
-    guess_list: &mut BTreeMap<String, i32>,
-    final_list: &[String],
-    accept_list: &[String],
-    json_data: &mut JsonState,
-    id: usize,
+    //reactive mood
+    cli: &Cli,                              //command line arguments
+    answer_list: &mut Vec<String>,          //avoid repeated answers
+    guess_list: &mut BTreeMap<String, i32>, //count the number of guesses
+    final_list: &[String],                  //given answer reposity
+    accept_list: &[String],                 //guess reposity
+    json_data: &mut JsonState,              //write state json
+    id: usize,                              //days use in -r mood
 ) -> i32 {
     let mut game: Game = Game {
         answer: String::new(),
         guesses: Vec::new(),
     };
     let mut game_record: Vec<GameHistory> = Vec::new();
+
     if cli.words.is_some() {
         if cli.days != 1 {
             return 10000;
@@ -159,6 +162,8 @@ fn play_tty(
     if cli.rand_verbos && cli.words.is_some() {
         return 10000;
     }
+    //avoid mood conflict
+
     println!(
         "I am in a tty. Please print {}!",
         "colorful characters".bold().red()
@@ -175,17 +180,19 @@ fn play_tty(
 
     if cli.rand_verbos {
         if cli.days == 1 {
+            //not give -d
             let rand_index = rand::thread_rng().gen_range(0..FINAL.len());
             answer_word = FINAL[rand_index].to_string();
             while answer_list.contains(&answer_word.clone()) {
+                //conflict , generate again
                 let rand_index = rand::thread_rng().gen_range(0..FINAL.len());
                 answer_word = FINAL[rand_index].to_string();
             }
         } else {
-            answer_word = final_list[id % final_list.len()].to_string()
+            answer_word = final_list[id % final_list.len()].to_string() //use user given reposity
         }
     } else if let Some(x) = &cli.words {
-        answer_word = x.clone();
+        answer_word = x.clone(); //given answer words in command line
     } else {
         print!("Input the answer word:");
         io::stdout().flush().unwrap();
@@ -196,7 +203,7 @@ fn play_tty(
         //io::stdout().flush().unwrap();
     }
     answer_list.push(answer_word.clone());
-    game.answer = answer_word.to_uppercase().clone();
+    game.answer = answer_word.to_uppercase().clone(); //store game status
 
     let mut chracter_status: Vec<char> = ['X'; 26].to_vec(); //total status for 26 characters
     let answer_word_vector: Vec<char> = answer_word.chars().collect(); //transform str into list
@@ -207,10 +214,10 @@ fn play_tty(
     }
 
     let mut guess = String::new();
-    let mut turn = 1;
-    let mut flag: bool = false;
-    let mut green_list: Vec<(char, i32)> = Vec::new();
-    let mut yellow_list: Vec<char> = Vec::new();
+    let mut turn = 1; //<=6 rounds
+    let mut flag: bool = false; //success guess!
+    let mut green_list: Vec<(char, i32)> = Vec::new(); //green state letters, use in difficult mood and tips mood
+    let mut yellow_list: Vec<char> = Vec::new(); //yellow state letters
     let mut red_list: Vec<char> = Vec::new();
 
     while turn <= 6 {
@@ -227,8 +234,10 @@ fn play_tty(
             //not  in ACCEPTABLE
             input_flag = false;
         } else if guess.len() != 6 {
+            //length illegal
             input_flag = false;
         } else if cli.diff_verbos {
+            // difficult mood : don't accord with previous answer
             for iter in green_list.iter() {
                 if guess_word_vector[iter.1 as usize] != iter.0 {
                     input_flag = false;
@@ -257,8 +266,8 @@ fn play_tty(
         if input_flag {
             *guess_list
                 .entry(guess.trim().to_string().to_uppercase())
-                .or_insert(0) += 1;
-            game.guesses.push(guess.trim().to_uppercase().to_string());
+                .or_insert(0) += 1; //count guess frequency
+            game.guesses.push(guess.trim().to_uppercase().to_string()); //update game state
 
             for i in 0..5 {
                 if guess_word_vector[i] == answer_word_vector[i] {
@@ -273,7 +282,7 @@ fn play_tty(
                 {
                     //don't overplus
                     s_status[i] = 'Y';
-                    *guess_appearance.entry(guess_word_vector[i]).or_insert(0) -= 1;
+                    *guess_appearance.entry(guess_word_vector[i]).or_insert(0) -= 1; // when reach 0, the number of letter equals,the rest need to be red
                 }
 
                 match s_status[i] {
@@ -303,7 +312,7 @@ fn play_tty(
             game_record.push(GameHistory {
                 s_status_history: s_status.clone(),
                 char_status_history: chracter_status.clone(),
-            });
+            }); //update game record
 
             for history_iter in game_record.iter() {
                 flag = true;
@@ -318,12 +327,13 @@ fn play_tty(
                     pr(*iter);
                 }
                 println!();
-            }
+            } //print historic info
 
             if cli.tips && turn != 6 {
                 let mut pos_flag: bool;
                 let mut pos_word_list: Vec<&str> = Vec::new();
                 for &possible_word in ACCEPTABLE {
+                    //visit all the words and judge if it correspond with previous answers
                     pos_flag = true;
                     let pos_word_vec: Vec<char> = possible_word.chars().collect();
                     for iter in green_list.iter() {
@@ -348,7 +358,7 @@ fn play_tty(
                         pos_word_list.push(possible_word);
                     }
                 }
-                calculate_entropy(&mut pos_word_list);
+                calculate_entropy(&mut pos_word_list); //use entropy to give recommand list
                 println!("{:?}", pos_word_list);
             }
         }
@@ -378,25 +388,29 @@ use ordered_float::OrderedFloat;
 use priority_queue::PriorityQueue;
 
 fn calculate_entropy(pos_word_list: &mut Vec<&str>) {
+    //use entropy to give recommand list
     let len = pos_word_list.len();
     let mut recommond_list = PriorityQueue::new();
     for i in pos_word_list.iter() {
         let mut entropy = 0.0;
         let mut possible_analyse: [i32; 300] = [0; 300];
         for j in pos_word_list.iter() {
-            let mut pos_num = 0;
+            //visit all the possible answers
+            let mut pos_num = 0; //use ternary to condense state
             for pos in 0..5 {
                 if i.chars().nth(pos) == j.chars().nth(pos) {
+                    //'G'
                     pos_num *= 3;
                     continue;
                 }
                 if let Some(target_char) = j.chars().nth(pos)
                     && i.find(target_char).is_some()
                 {
+                    //'Y'
                     pos_num = pos_num * 3 + 1;
                     continue;
                 }
-                pos_num = pos_num * 3 + 2;
+                pos_num = pos_num * 3 + 2; //'R'
             }
             possible_analyse[pos_num] += 1;
         }
@@ -407,7 +421,7 @@ fn calculate_entropy(pos_word_list: &mut Vec<&str>) {
             }
             *k = 0;
         }
-        recommond_list.push(*i, OrderedFloat(entropy));
+        recommond_list.push(*i, OrderedFloat(entropy)); //orderflofat : can compare f64
     }
     println!("Top 5 words by entropy:");
     for _ in 0..5 {
@@ -418,6 +432,7 @@ fn calculate_entropy(pos_word_list: &mut Vec<&str>) {
 }
 
 fn play_dis_tty(
+    //not reactive mood
     cli: &Cli,
     answer_list: &mut Vec<String>,
     guess_list: &mut BTreeMap<String, i32>,
@@ -597,30 +612,34 @@ fn play_dis_tty(
 }
 
 fn load_word_list(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    //load answer word list
     let content = std::fs::read_to_string(path)?;
     let words: Vec<String> = content
         .lines()
-        .map(|line| line.trim().to_lowercase())
+        .map(|line| line.trim().to_lowercase()) //lowercase
         .filter(|word| !word.is_empty())
         .collect();
 
     if words.is_empty() {
+        //empty? illegal
         return Err("Empty".into());
     }
-    let unique_words: HashSet<&str> = words.iter().map(|x| &x[..]).collect();
+    let unique_words: HashSet<&str> = words.iter().map(|x| &x[..]).collect(); //->&str easy to use is_subset
     if unique_words.len() != words.len() {
         return Err("repeat".into());
     }
     let final_set: HashSet<&str> = FINAL.iter().copied().collect();
     if !unique_words.is_subset(&final_set) {
+        //subset of FINAL
         return Err("not subset".into());
     }
     let mut sorted_words = words;
-    sorted_words.sort();
+    sorted_words.sort(); //letter order
     Ok(sorted_words)
 }
 
 fn load_accept_list(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    //load guess word list
     let content = std::fs::read_to_string(path)?;
     let words: Vec<String> = content
         .lines()
@@ -635,7 +654,7 @@ fn load_accept_list(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::error::E
     if unique_words.len() != words.len() {
         return Err("repeat".into());
     }
-    let final_set: HashSet<&str> = ACCEPTABLE.iter().copied().collect();
+    let final_set: HashSet<&str> = ACCEPTABLE.iter().copied().collect(); // only change
     if !unique_words.is_subset(&final_set) {
         return Err("not subset".into());
     }
@@ -645,6 +664,7 @@ fn load_accept_list(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::error::E
 }
 
 fn load_state_json(path: &PathBuf) -> Result<JsonState, Box<dyn std::error::Error>> {
+    //load state json and return Result
     let file = File::open(path)?;
     let reader = BufReader::new(file);
     let u = serde_json::from_reader(reader)?;
@@ -652,6 +672,7 @@ fn load_state_json(path: &PathBuf) -> Result<JsonState, Box<dyn std::error::Erro
 }
 
 fn write_state_json(
+    //write json Result
     path: &PathBuf,
     json_data: &JsonState,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -671,19 +692,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     if let Some(ref __) = merged_cli.state {
+        // state data
         match load_state_json(&merged_cli.state.clone().unwrap()) {
             Result::Ok(x) => json_data = x,
             Err(st) => {
-                json_data.total_rounds = 0;
+                json_data.total_rounds = 0; //json data wrong
                 return Err(st);
             }
         }
     }
     let mut answer_list: Vec<String> = Vec::new();
-    let mut guess_list: BTreeMap<String, i32> = BTreeMap::new();
+    let mut guess_list: BTreeMap<String, i32> = BTreeMap::new(); //ordered by appearence frequency
 
     let mut final_list: Vec<String>;
     if let Some(ref x) = merged_cli.final_repo {
+        // given answer repo
         match load_word_list(x) {
             std::result::Result::Ok(x) => final_list = x,
             std::result::Result::Err(_x) => return Err(String::from("load error").into()),
@@ -694,12 +717,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut rng = if let Some(seed) = merged_cli.seed {
         StdRng::seed_from_u64(seed)
     } else {
-        StdRng::seed_from_u64(42)
+        StdRng::seed_from_u64(42) //default
     };
     final_list.shuffle(&mut rng);
 
     let accept_list: Vec<String>;
     if let Some(ref x) = merged_cli.accept_repo {
+        //given guess repo
         accept_list = load_accept_list(x).unwrap();
     } else {
         accept_list = ACCEPTABLE.iter().map(|&s| s.to_string()).collect();
@@ -708,6 +732,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if is_tty {
         match merged_cli.words {
             Some(ref _x) => {
+                //given word 1round
                 let success_flag = play_tty(
                     &merged_cli,
                     &mut answer_list,
@@ -718,7 +743,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     merged_cli.days - 1,
                 );
                 if success_flag == 10000 {
-                    return Err(String::from("mood mix!").into());
+                    return Err(String::from("mood mix!").into()); //mood mix
                 }
                 Ok(())
             }
@@ -728,12 +753,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut success_record: i32 = 0;
                 let mut try_record: i32 = 0;
                 if let Some(__) = &merged_cli.state {
+                    //organize historic state infomation
                     for iter in json_data.games.iter() {
                         if iter.guesses[iter.guesses.len() - 1] == iter.answer {
+                            //guess success
                             success_record += 1;
                             try_record += iter.guesses.len() as i32;
                         }
                         for words_iter in 0..iter.guesses.len() {
+                            //update guess frequency
                             *guess_list
                                 .entry(iter.guesses[words_iter].trim().to_lowercase().to_string())
                                 .or_insert(0) += 1;
@@ -756,15 +784,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         return Err(String::from("mood mix!").into());
                     }
                     if success_flag > 0 {
+                        //success
                         success_record += 1;
                         try_record += success_flag;
                     }
                     if let Some(x) = &merged_cli.state {
+                        //write json data
                         write_state_json(x, &json_data)?;
                     }
                     if merged_cli.status_verbos {
+                        //calculate ratio
                         //io::stdout().flush().unwrap();
                         if success_record > 0 {
+                            //avoid NaN
                             println!(
                                 "{} {} {:.2}",
                                 success_record,
@@ -777,6 +809,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         //io::stdout().flush().unwrap();
                         let mut entries: Vec<(&String, &i32)> = guess_list.iter().collect();
                         entries.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+                        //the 5 most guesses words
                         for iter in entries.iter().take(5) {
                             io::stdout().flush().unwrap();
                             print!("{} {} ", iter.0.to_uppercase(), iter.1);
