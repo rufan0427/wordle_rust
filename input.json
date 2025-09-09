@@ -1,36 +1,14 @@
 {
-  "total_rounds": 3,
+  "total_rounds": 1,
   "games": [
     {
-      "answer": "WEARY",
+      "answer": "SHAFT",
       "guesses": [
-        "APPLE",
         "CRANE",
-        "REACT",
-        "CARGO",
-        "APPLE",
-        "AMPLY"
-      ]
-    },
-    {
-      "answer": "BANJO",
-      "guesses": [
-        "APPLE",
-        "EVERT",
-        "CARGO",
-        "BARRY",
-        "BREAD",
-        "HAPPY"
-      ]
-    },
-    {
-      "answer": "VIGIL",
-      "guesses": [
-        "APPLE",
-        "APPLE",
-        "APPLE",
-        "APPLE",
-        "CARGO",
+        "WRACK",
+        "CRANE",
+        "CRANE",
+        "CRANE",
         "CRANE"
       ]
     }
